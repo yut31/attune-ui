@@ -1,0 +1,17 @@
+{
+  "folders": [
+    {
+      "name": "NOVA \u2014 project guide",
+      "path": "."
+    }
+  ],
+  "settings": {
+    "files.exclude": {
+      "**/__pycache__": true
+    },
+    "search.exclude": {
+      "**/.venv": true,
+      "**/uv.lock": true
+    }
+  }
+}

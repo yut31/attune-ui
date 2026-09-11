@@ -1,0 +1,16 @@
+{
+  "base": {
+    "url": "https://github.com/KineticJetIce245/NOVA2026",
+    "local_source": "/Users/yutong/Documents/git/NOVA2026",
+    "commit": "4867db7e198f26f9fa12d0d1260d3e5256eb0aeb",
+    "previous_commit": "00e7f5d0fe1e414b011b41b0219e4dcb284406a1",
+    "checked_on": "2026-09-09"
+  },
+  "neuro-attention": {
+    "url": "https://github.com/veiyyu/novaAAD",
+    "subdirectory": "neuro-attention-reorganized",
+    "commit": "6054e496738594877d9c068db837b64d79b19dfe",
+    "checked_on": "2026-09-09"
+  },
+  "local_changes": "Review fixes and combined_pipeline.py retained; upstream-deleted labeler archived under base/scripts/legacy."
+}

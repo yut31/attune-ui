@@ -1,0 +1,13 @@
+**/.venv/
+**/__pycache__/
+*.py[cod]
+.DS_Store
+.env
+.env.*
+**/datasets/*
+!**/datasets/.gitkeep
+**/models/*
+!**/models/.gitkeep
+**/AAD/
+
+training-runs/
