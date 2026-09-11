@@ -25,17 +25,27 @@ class UIParser(HTMLParser):
         self.ids = set()
         self.scripts = []
         self.in_script = False
+        self.elements = []
+        self.headings = []
+        self.in_heading = False
 
     def handle_starttag(self, tag, attrs):
+        self.elements.append((tag, dict(attrs)))
+        if tag in ('h1', 'h2', 'h3'):
+            self.in_heading = True
         self.ids.update(value for name, value in attrs if name == 'id')
         if tag == 'script':
             self.in_script = True
 
     def handle_endtag(self, tag):
+        if tag in ('h1', 'h2', 'h3'):
+            self.in_heading = False
         if tag == 'script':
             self.in_script = False
 
     def handle_data(self, data):
+        if self.in_heading:
+            self.headings.append(data)
         if self.in_script:
             self.scripts.append(data)
 
@@ -128,6 +138,53 @@ class UIRegressionTests(unittest.TestCase):
                 state.clear()
                 state.update(original)
         self.assertEqual(module.STATE, original)
+
+
+class UIShellTests(unittest.TestCase):
+    def setUp(self):
+        self.ui = UIParser()
+        self.ui.feed(UI.read_text(encoding='utf-8'))
+        self.ui.close()
+        self.script = '\n'.join(self.ui.scripts)
+
+    def test_ui_001_t01_shell_dom_ids(self):
+        ids = [attrs['id'] for _, attrs in self.ui.elements if 'id' in attrs]
+        for element_id in ('banner', 'eeg', 'cardA', 'cardB', 'fillA', 'fillB',
+                           'dbA', 'dbB', 'statusA', 'statusB', 'needle', 'footer'):
+            with self.subTest(element_id=element_id):
+                self.assertEqual(ids.count(element_id), 1)
+
+    def test_ui_001_t02_state_request_preserved(self):
+        self.assertRegex(self.script, r'''\bfetch\s*\(\s*['"]/state['"]''')
+
+    def test_ui_001_t03_state_fields_preserved(self):
+        fields = set(re.findall(r'\bs\s*\.\s*(\w+)', self.script))
+        self.assertTrue(set(STATE_FIELDS).issubset(fields))
+
+    def test_ui_001_t04_attune_heading(self):
+        self.assertIn('ATTUNE', self.ui.headings)
+        self.assertTrue(any(tag == 'header' for tag, _ in self.ui.elements))
+        self.assertTrue(any(tag == 'span' and attrs.get('id') == 'systemText'
+                            for tag, attrs in self.ui.elements))
+        html = UI.read_text(encoding='utf-8')
+        self.assertIn('<title>ATTUNE — Neuro-Adaptive Hearing</title>', html)
+        self.assertIn('<p class="subtitle">Neuro-Adaptive Hearing</p>', html)
+        self.assertIn('<footer id="footer">ATTUNE · EEG-guided adaptive hearing', html)
+        self.assertNotIn('NOVA', html)
+
+    def test_ui_001_t05_talker_headings(self):
+        for talker in ('Talker A', 'Talker B'):
+            with self.subTest(talker=talker):
+                self.assertIn(talker, self.ui.headings)
+
+    def test_ui_001_t06_eeg_canvas(self):
+        canvases = [attrs for tag, attrs in self.ui.elements
+                    if tag == 'canvas' and attrs.get('id') == 'eeg']
+        self.assertEqual(len(canvases), 1)
+        self.assertGreater(int(canvases[0]['width']), 0)
+        self.assertGreater(int(canvases[0]['height']), 0)
+        self.assertTrue(canvases[0].get('aria-label'))
+        self.assertIn('requestAnimationFrame(drawEEG)', self.script)
 
 
 if __name__ == '__main__':

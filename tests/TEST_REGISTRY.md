@@ -24,8 +24,13 @@ Every test added by any human or AI must be registered here.
 | UI-000-T04 | Existing UI | unit/static | tests/test_ui.py | test_ui_000_t04_frontend_state_fields | frontend script references all 13 current state fields | PASS |
 | UI-000-T05 | Demo state | unit | tests/test_ui.py | test_ui_000_t05_backend_state_fields | safely imported real STATE contains all 13 required keys | PASS |
 | UI-000-T06 | Demo state | unit | tests/test_ui.py | test_ui_000_t06_set_updates_and_restores_state | real _set updates values, preserves other fields, accepts empty/falsy updates; original STATE restored | PASS |
-| UI-001-T01 | UI shell | component | TBD | renders main application | required dashboard sections render | PLANNED |
-| UI-001-T02 | UI shell | component | TBD | renders without prediction data | no crash; no-data state visible | PLANNED |
+| UI-001-T01 | UI shell | unit/static | tests/test_ui.py | test_ui_001_t01_shell_dom_ids | all 12 required IDs exist exactly once | PASS |
+| UI-001-T02 | UI shell | unit/static | tests/test_ui.py | test_ui_001_t02_state_request_preserved | /state is still fetched | PASS |
+| UI-001-T03 | UI shell | unit/static | tests/test_ui.py | test_ui_001_t03_state_fields_preserved | all 13 state fields remain referenced | PASS |
+| UI-001-T04 | UI shell | unit/static | tests/test_ui.py | test_ui_001_t04_attune_heading | ATTUNE branding and header markup exist, including span with systemText ID (UI-001C) | PASS |
+| UI-001-T05 | UI shell | unit/static | tests/test_ui.py | test_ui_001_t05_talker_headings | both talker headings exist | PASS |
+| UI-001-T06 | UI shell | unit/static | tests/test_ui.py | test_ui_001_t06_eeg_canvas | labeled EEG canvas with positive dimensions and animation hook exists | PASS |
+| UI-001-T07 | UI shell | smoke | inline Node VM harness (session command) | deterministic offline state transitions | waiting, A/B, EEG drawing, session values, done, disconnect and recovery work | PASS |
 | UI-002-T01 | payload contract | unit | TBD | accepts valid payload | parsed successfully | PLANNED |
 | UI-002-T02 | payload contract | unit | TBD | malformed payload | handled safely | PLANNED |
 | UI-003-T01 | demo stream | unit | TBD | deterministic stream starts | expected sequence emitted | PLANNED |
@@ -114,3 +119,66 @@ engine dependencies temporarily stubbed and sys.modules restored after import.
 No main/engine calls, hardware, datasets, server, or network used by the UI tests.
 These checks do not execute JavaScript or verify visual rendering. Bytecode writes
 were disabled to avoid creating files outside the three allowed paths.
+
+
+### 2026-09-11 — UI-001
+
+**Agent:** Codex
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.test_ui -v
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
+```
+
+**Results:** Targeted run PASS: 12 tests (6 retained UI-000 + 6 new UI-001).
+Discovery FAIL: 14 entries, 12 passed, 2 import errors: `test_combined` and
+`test_driving_pilot` both require unavailable `numpy`. No dependencies changed.
+
+**Additional smoke check:** `node` via stdin with built-in `fs`, `vm`, and `assert`;
+executed the actual inline UI script with a minimal DOM/canvas stub and a mocked
+`fetch`. PASS for warmup, attended A/B, correlation, accuracy, elapsed time, EEG
+drawing, completion, disconnection and recovery. No network or server used.
+This was a one-off session harness, not an additional installed test dependency.
+
+**Scope notes:** UI-001-T01/T02 previously had generic planned descriptions;
+they now follow the explicitly requested UI-001 test mapping. UI-000 tests and
+historical run results remain intact. Static markup tests do not prove computed
+visibility or visual layout. No browser rendering review performed. Zero
+`correct_frac` remains unavailable/ambiguous and is displayed as a dash, preserving
+the previous UI's truthy availability convention. Correlation is not a confidence
+percentage.
+
+
+### 2026-09-11 — UI-001B
+
+**Agent:** Codex  
+**Status:** PASS
+
+**Updated test:** UI-001-T04 (`test_ui_001_t04_nova_heading`; internal method name
+retained). Expects ATTUNE and additionally checks the browser title, subtitle,
+initial footer description and absence of old NOVA branding in ui.html.
+No tests deleted or weakened; no additional test methods needed.
+
+**Exact command:**
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.test_ui -v
+```
+
+**Result:** PASS, all 12 tests. Bytecode writes disabled to respect file scope.
+Branding-only text changes; /state, DOM IDs, data fields and JS logic unchanged.
+
+
+### 2026-09-11 — UI-001C
+
+**Agent:** Codex  
+**Result:** PASS, 12 tests.
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.test_ui -v
+```
+
+Updated UI-001-T04: renamed to `test_ui_001_t04_attune_heading`, retaining every
+assertion and adding an explicit parsed-element check for a span with
+`id="systemText"`. This check rejects the reported malformed `<spanid=...>` tag.
+The on-disk ui.html already contained the correct `<span id="systemText">Connecting</span>`;
+no production edit was necessary. Historical test names above describe prior runs.
