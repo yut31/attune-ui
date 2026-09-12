@@ -3,6 +3,7 @@ from contextlib import ExitStack
 from copy import deepcopy
 from html.parser import HTMLParser
 import importlib.util
+import json
 from pathlib import Path
 import re
 import shutil
@@ -308,6 +309,128 @@ const flush=async()=>{for(let i=0;i<8;i++)await Promise.resolve()};
         result = subprocess.run([shutil.which('node'), '-e', harness, str(UI)],
                                 capture_output=True, text=True, timeout=15)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+
+
+class UIVigilanceTests(unittest.TestCase):
+    def setUp(self):
+        self.html = UI.read_text(encoding='utf-8')
+        self.ui = UIParser()
+        self.ui.feed(self.html)
+        self.ui.close()
+        self.script = '\n'.join(self.ui.scripts)
+
+    def run_js(self, body):
+        node = shutil.which('node')
+        if not node:
+            self.skipTest('Optional JS execution requires an existing Node executable')
+        harness = r"""
+const fs=require('fs'),vm=require('vm');
+const html=fs.readFileSync(process.argv[1],'utf8');
+const elements=Object.fromEntries([...html.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],{
+ textContent:'',style:{},dataset:{},hidden:false,classList:{toggle(){}},lastElementChild:{},
+ setAttribute(){},addEventListener(){}}]));
+elements.eeg.getContext=()=>({setTransform(){},clearRect(){}});
+elements.eeg.getBoundingClientRect=()=>({width:1040});
+let clock=0;
+const requests=[];
+const context=vm.createContext({document:{getElementById:id=>elements[id]},
+ devicePixelRatio:1,performance:{now:()=>clock},addEventListener(){},
+ requestAnimationFrame(){},setInterval(){},
+ fetch:()=>new Promise((resolve,reject)=>requests.push({resolve,reject}))});
+const run=code=>vm.runInContext(code,context);
+run(html.match(/<script>([\s\S]*?)<\/script>/)[1]);
+const flush=async()=>{for(let i=0;i<8;i++)await Promise.resolve()};
+(async()=>{
+""" + body + r"""
+})().catch(e=>{console.error(e);process.exitCode=1});
+"""
+        result = subprocess.run([node, '-e', harness, str(UI)], capture_output=True,
+                                text=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        return json.loads(result.stdout)
+
+    def test_ui_003_t01_vigilance_section(self):
+        self.assertTrue(any(tag == 'section' and attrs.get('id') == 'vigilance'
+                            for tag, attrs in self.ui.elements))
+        self.assertIn('Vigilance', self.ui.headings)
+
+    def test_ui_003_t02_lapse_display(self):
+        self.assertIn('Lapse risk', self.ui.headings)
+        for element_id in ('lapseRisk', 'lapseFill', 'vigilanceStatus', 'vigilanceNote'):
+            self.assertIn(element_id, self.ui.ids)
+
+    def test_ui_003_t03_real_unavailable_and_demo_exit(self):
+        self.assertIn('Combined vigilance output not connected yet.', self.html)
+        self.assertIn('<p id="lapseRisk">—</p>', self.html)
+        states = self.run_js(r"""
+const snapshots=[];
+const snapshot=()=>snapshots.push([elements.vigilanceStatus.textContent,
+ elements.lapseRisk.textContent,elements.lapseFill.style.width]);
+// Ordinary auditory values must never become a vigilance measurement.
+requests[0].resolve({json:async()=>JSON.parse(run('JSON.stringify(demoState(12))'))});
+await flush();snapshot();
+run('toggleDemo()');clock=12000;await run('tick()');snapshot();
+run('toggleDemo()');snapshot(); // Must clear before the pending fetch completes.
+requests[1].reject(Error('offline'));await flush();snapshot();
+const pending=run('tick()');
+requests[2].resolve({json:async()=>({...JSON.parse(run('JSON.stringify(demoState(0))')),running:false})});
+await pending;snapshot();
+console.log(JSON.stringify(snapshots));
+""")
+        unavailable = ['Awaiting pipeline', '—', '0%']
+        self.assertEqual(states[0], unavailable)
+        self.assertEqual(states[1][0], 'Elevated lapse risk')
+        self.assertIn('simulated', states[1][1])
+        for snapshot in states[2:]:
+            self.assertEqual(snapshot, unavailable)
+
+    def test_ui_003_t04_deterministic_lapse(self):
+        values = self.run_js(r"""
+console.log(JSON.stringify([0,3,6,12,18,24,123.5].map(t=>[
+ run(`demoLapseRisk(${t})`),run(`demoLapseRisk(${t})`),run(`demoLapseRisk(${t+24})`)])));
+""")
+        for first, repeated, cycle in values:
+            self.assertEqual(first, repeated)
+            self.assertAlmostEqual(first, cycle)
+        self.assertAlmostEqual(values[0][0], .1)
+        self.assertAlmostEqual(values[3][0], .9)
+        self.assertAlmostEqual(values[5][0], .1)
+
+    def test_ui_003_t05_bounded_smooth_lapse(self):
+        values = self.run_js(r"""
+console.log(JSON.stringify(Array.from({length:2401},(_,i)=>run(`demoLapseRisk(${i/50})`))));
+""")
+        self.assertTrue(all(0 <= value <= 1 for value in values))
+        self.assertGreater(max(values), .7)
+        self.assertLess(min(values), .4)
+        self.assertLess(max(abs(b-a) for a,b in zip(values, values[1:])), .003)
+
+    def test_ui_003_t06_no_randomness(self):
+        self.assertNotRegex(self.script, r'Math\s*(?:\.\s*random|\[\s*[\'\"]random)')
+
+    def test_ui_003_t07_display_thresholds(self):
+        labels = self.run_js(r"""
+console.log(JSON.stringify([0,.399999,.4,.699999,.7,1].map(x=>run(`vigilanceLabel(${x})`))));
+""")
+        self.assertEqual(labels, ['Attentive', 'Attentive', 'Watch', 'Watch',
+                                  'Elevated lapse risk', 'Elevated lapse risk'])
+
+    def test_ui_003_t08_contract_unchanged(self):
+        self.assertEqual(set(load_live_demo().STATE), set(STATE_FIELDS))
+        self.assertNotIn('lapse_score', self.script)
+        self.assertIn('paintVigilance(demoMode ? s.t : null)', self.script)
+        self.assertEqual(set(re.findall(r'\bs\s*\.\s*(\w+)', self.script)), set(STATE_FIELDS))
+        helper = self.script.split('function demoLapseRisk(t){', 1)[1].split('function vigilanceLabel', 1)[0]
+        for field in ('eeg', 'corr_a', 'corr_b', 'correct_frac', 'attended', 'gain'):
+            self.assertNotIn(field, helper)
+
+    def test_ui_003_t09_existing_shell_preserved(self):
+        for title in ('ATTUNE', 'Talker A', 'Talker B', 'Live EEG activity'):
+            self.assertIn(title, self.ui.headings)
+        for element_id in ('eeg', 'demoToggle', 'demoDisclosure', 'banner', 'cardA', 'cardB'):
+            self.assertIn(element_id, self.ui.ids)
+        self.assertIn('DEMO MODE · SIMULATED DATA', self.html)
 
 
 if __name__ == '__main__':

@@ -30,7 +30,7 @@ When a task is complete, remove its row from the active table and append a compl
 ### TEMPLATE — TASK-000
 
 **Agent:**  
-**Status:** DONE  
+**Status:** DONE
 **Goal:**  
 
 **Files changed**
@@ -67,8 +67,8 @@ When a task is complete, remove its row from the active table and append a compl
 
 ### UI-000 — Existing UI safety tests
 
-**Agent:** Codex  
-**Status:** DONE  
+**Contributor:** Development workflow
+**Status:** DONE
 **Date:** 2026-09-11  
 **Goal:** Add test-only regression coverage before UI redesign.
 
@@ -125,8 +125,8 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 
 ### UI-001 — Live UI shell redesign
 
-**Agent:** Codex  
-**Status:** DONE  
+**Contributor:** Development workflow
+**Status:** DONE
 **Date:** 2026-09-11  
 **Goal:** Polish the existing live dashboard while preserving the backend contract.
 
@@ -185,8 +185,8 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 
 ### UI-001B — User-facing ATTUNE branding
 
-**Agent:** Codex  
-**Status:** DONE  
+**Contributor:** Development workflow
+**Status:** DONE
 **Date:** 2026-09-11  
 **Goal:** Change only user-visible product branding from NOVA to ATTUNE.
 
@@ -233,8 +233,8 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.test_ui -v
 
 ### UI-001C — Header regression coverage correction
 
-**Agent:** Codex  
-**Status:** DONE  
+**Contributor:** Development workflow
+**Status:** DONE
 **Date:** 2026-09-11
 
 **Files changed**
@@ -275,8 +275,8 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.test_ui -v
 
 ### UI-002 — Deterministic ATTUNE Demo Mode
 
-**Agent:** Codex  
-**Status:** DONE  
+**Contributor:** Development workflow
+**Status:** DONE
 **Date:** 2026-09-11
 
 **Files changed**
@@ -333,5 +333,66 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 **Human review needed**
 - No implementation blocker. Note existing Python environment limitation.
 - No dependencies installed, external services used, backend changes, commits or pushes.
+
+---
+
+
+### UI-003 — ATTUNE vigilance / cognitive-state visualization
+
+**Contributor:** Development workflow
+**Status:** DONE
+**Date:** 2026-09-11
+
+**Exact files changed**
+- neuro-attention/src/ui.html
+- tests/test_ui.py
+- tests/TEST_REGISTRY.md
+- AI_LEDGER.md
+
+**Behavior added**
+- Compact vigilance panel, lapse-risk percentage and restrained horizontal meter.
+- Real Mode always shows Awaiting pipeline, a dash, and Combined vigilance output
+  not connected yet. Demo exit clears simulated risk synchronously before polling.
+- Demo-only time-based risk is explicitly marked simulated, under the existing
+  prominent simulated-data disclosure, with no claim that it comes from EEG.
+- Auditory attention, state payload, backend and model behavior remain unchanged.
+
+**Formula and thresholds**
+- `0.5 - 0.4*cos(2*pi*(t % 24)/24)`: smooth 24-second cycle, .1 to .9 and back.
+- Risk below .4: Attentive; .4 to below .7: Watch; .7 and above: Elevated lapse risk.
+- These are display-only simulation thresholds; no diagnostic/model claims.
+
+**Tests added**
+- UI-003-T01–T09: panel, lapse display, real unavailability/exit cleanup,
+  determinism, bounds/smoothness, no randomness, threshold boundaries,
+  unchanged contract and preserved existing UI.
+- Actual JS helper/mode execution uses already-installed Node with mocked browser
+  facilities; all UI-000, UI-001 and UI-002 tests preserved unchanged.
+
+**Exact commands and results**
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.test_ui -v
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
+```
+- UI: PASS, 30 tests, no failures/skips.
+- Discovery: 30 passed, 2 existing import errors from missing numpy in
+  test_combined/test_driving_pilot. Environment-blocked; dependencies unchanged.
+
+**Assumptions**
+- Vigilance remains frontend-only and separate from demoState's existing contract.
+- No real vigilance output exists in /state yet, so no real score is rendered.
+
+**Limitations / remaining issues**
+- Backend integration intentionally deferred. No browser visual review performed.
+- Runtime JS checks require existing Node and skip if absent; all ran here.
+- Full existing suite needs its dependency-equipped Python environment.
+
+**Recommended next task**
+- Human visual review; real vigilance integration only in a separately authorized
+  task. UI-004 not started.
+
+**Human review needed**
+- No implementation blocker; note the known full-suite environment limitation.
+- No backend/model/preprocessing edits, dependency installs, commits or pushes.
 
 ---

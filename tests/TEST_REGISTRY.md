@@ -40,8 +40,15 @@ Every test added by any human or AI must be registered here.
 | UI-002-T07 | ATTUNE Demo Mode | unit | tests/test_ui.py | test_ui_002_t07_both_attention_states | 16-second cycle includes A and B | PASS |
 | UI-002-T08 | ATTUNE Demo Mode | unit | tests/test_ui.py | test_ui_002_t08_attune_branding | ATTUNE heading and title preserved | PASS |
 | UI-002-T09 | ATTUNE Demo Mode | unit | tests/test_ui.py | test_ui_002_t09_determinism_and_mode_isolation | executed JS: deterministic values, smooth transitions, bounded EEG, demo isolation, exit cleanup and real recovery | PASS |
-| UI-003-T01 | demo stream | unit | TBD | deterministic stream starts | expected sequence emitted | PLANNED |
-| UI-003-T02 | demo stream | unit | TBD | stream cleanup | timer/subscription cleaned up | PLANNED |
+| UI-003-T01 | Vigilance display | unit | tests/test_ui.py | test_ui_003_t01_vigilance_section | vigilance panel exists | PASS |
+| UI-003-T02 | Vigilance display | unit | tests/test_ui.py | test_ui_003_t02_lapse_display | lapse risk text and compact meter exist | PASS |
+| UI-003-T03 | Vigilance display | unit | tests/test_ui.py | test_ui_003_t03_real_unavailable_and_demo_exit | real mode never displays risk; exit immediately clears simulated risk, including offline/warmup | PASS |
+| UI-003-T04 | Vigilance display | unit | tests/test_ui.py | test_ui_003_t04_deterministic_lapse | equal times and repeated cycles yield equal risk | PASS |
+| UI-003-T05 | Vigilance display | unit | tests/test_ui.py | test_ui_003_t05_bounded_smooth_lapse | risk stays finite in 0..1 and varies smoothly through low/high ranges | PASS |
+| UI-003-T06 | Vigilance display | unit | tests/test_ui.py | test_ui_003_t06_no_randomness | no Math.random | PASS |
+| UI-003-T07 | Vigilance display | unit | tests/test_ui.py | test_ui_003_t07_display_thresholds | Attentive below .4, Watch from .4 to below .7, Elevated lapse risk from .7 | PASS |
+| UI-003-T08 | Vigilance display | unit | tests/test_ui.py | test_ui_003_t08_contract_unchanged | existing state keys unchanged; no lapse_score required or auditory inference | PASS |
+| UI-003-T09 | Vigilance display | unit | tests/test_ui.py | test_ui_003_t09_existing_shell_preserved | ATTUNE, talkers, EEG and demo disclosure/control remain | PASS |
 | UI-004-T01 | attention card | component | TBD | focused prediction | correct value and state | PLANNED |
 | UI-004-T02 | attention card | component | TBD | no data | placeholder state | PLANNED |
 | UI-005-T01 | signal quality | unit/component | TBD | good quality | GOOD state | PLANNED |
@@ -220,3 +227,34 @@ and this test passed here. No new dependency or JS testing framework was introdu
 **Scope:** UI-002-T01/T02 replace generic planned contract placeholders with the
 user's explicit Demo Mode test mapping. Earlier run history stays intact. Visual
 browser review and hardware/backend integration are not part of this test run.
+
+
+### 2026-09-11 — UI-003
+
+**Agent:** Codex
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.test_ui -v
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
+```
+
+**Results:** UI suite PASS, 30 tests with no skips (21 existing + 9 UI-003).
+Full discovery: 32 entries, 30 passed, 2 existing module import errors:
+`test_combined` and `test_driving_pilot` cannot import numpy. No dependencies
+installed, tests modified to hide errors, or existing tests skipped.
+
+**Coverage:** New Node VM checks execute actual frontend helpers and mode paths
+with mocked DOM, clock and network. Verify periodic repeatability, 2,401 bounded
+samples, smoothness, exact display thresholds, unavailable real/warmup/offline
+states and immediate cleanup on demo exit. Node was already installed and all
+runtime checks passed; these optional checks skip on machines without Node.
+
+**Formula:** `0.5 - 0.4*cos(2*pi*(t % 24)/24)`; range .1–.9, 24-second cycle.
+Display thresholds: below .4 Attentive; .4 to below .7 Watch; .7+ Elevated lapse
+risk. These are display-only labels for synthetic values, not model thresholds.
+Real mode has no score. Demo lapse values remain outside the 13-field state
+contract and are never derived from auditory attention or EEG.
+
+**Registry note:** UI-003-T01/T02 generic planned demo-stream placeholders now
+follow the user's explicit vigilance-task mapping; past test history retained.
+No browser visual review performed.
