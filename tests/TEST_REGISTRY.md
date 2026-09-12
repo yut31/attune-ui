@@ -31,8 +31,15 @@ Every test added by any human or AI must be registered here.
 | UI-001-T05 | UI shell | unit/static | tests/test_ui.py | test_ui_001_t05_talker_headings | both talker headings exist | PASS |
 | UI-001-T06 | UI shell | unit/static | tests/test_ui.py | test_ui_001_t06_eeg_canvas | labeled EEG canvas with positive dimensions and animation hook exists | PASS |
 | UI-001-T07 | UI shell | smoke | inline Node VM harness (session command) | deterministic offline state transitions | waiting, A/B, EEG drawing, session values, done, disconnect and recovery work | PASS |
-| UI-002-T01 | payload contract | unit | TBD | accepts valid payload | parsed successfully | PLANNED |
-| UI-002-T02 | payload contract | unit | TBD | malformed payload | handled safely | PLANNED |
+| UI-002-T01 | ATTUNE Demo Mode | unit | tests/test_ui.py | test_ui_002_t01_demo_control_and_required_ids | demo button and required IDs exist | PASS |
+| UI-002-T02 | ATTUNE Demo Mode | unit | tests/test_ui.py | test_ui_002_t02_simulated_disclosure | explicit simulated-data and no-playback disclosure exists | PASS |
+| UI-002-T03 | ATTUNE Demo Mode | unit | tests/test_ui.py | test_ui_002_t03_real_endpoint_preserved | real /state fetch and stale-response guard remain | PASS |
+| UI-002-T04 | ATTUNE Demo Mode | unit | tests/test_ui.py | test_ui_002_t04_no_randomness | no Math.random in frontend script | PASS |
+| UI-002-T05 | ATTUNE Demo Mode | unit | tests/test_ui.py | test_ui_002_t05_existing_demo_contract | demo uses exactly the existing 13 fields; accuracy unavailable | PASS |
+| UI-002-T06 | ATTUNE Demo Mode | unit | tests/test_ui.py | test_ui_002_t06_deterministic_eeg_source | EEG helper uses deterministic sine waves and elapsed time | PASS |
+| UI-002-T07 | ATTUNE Demo Mode | unit | tests/test_ui.py | test_ui_002_t07_both_attention_states | 16-second cycle includes A and B | PASS |
+| UI-002-T08 | ATTUNE Demo Mode | unit | tests/test_ui.py | test_ui_002_t08_attune_branding | ATTUNE heading and title preserved | PASS |
+| UI-002-T09 | ATTUNE Demo Mode | unit | tests/test_ui.py | test_ui_002_t09_determinism_and_mode_isolation | executed JS: deterministic values, smooth transitions, bounded EEG, demo isolation, exit cleanup and real recovery | PASS |
 | UI-003-T01 | demo stream | unit | TBD | deterministic stream starts | expected sequence emitted | PLANNED |
 | UI-003-T02 | demo stream | unit | TBD | stream cleanup | timer/subscription cleaned up | PLANNED |
 | UI-004-T01 | attention card | component | TBD | focused prediction | correct value and state | PLANNED |
@@ -182,3 +189,34 @@ assertion and adding an explicit parsed-element check for a span with
 `id="systemText"`. This check rejects the reported malformed `<spanid=...>` tag.
 The on-disk ui.html already contained the correct `<span id="systemText">Connecting</span>`;
 no production edit was necessary. Historical test names above describe prior runs.
+
+
+### 2026-09-11 — UI-002
+
+**Agent:** Codex
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.test_ui -v
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
+```
+
+**Results:** Final UI run PASS: 21 tests, no skips (12 existing, 9 new).
+Full discovery: 23 entries, 21 passed, 2 import errors: test_combined and
+ test_driving_pilot cannot import numpy. Existing environment-blocked issue;
+no packages installed or tests hidden.
+
+**Initial run:** 20 passed, UI-002-T05 failed because the new source-inspection
+regex treated the numeric ternary operand `0:` as a field name. Restricted the
+regex to identifier names and reran successfully. Runtime exact-key checks also pass.
+
+**Execution coverage:** T09 runs the real inline script in the existing Node
+executable using only built-in vm/assert/fs, fake clock and DOM/canvas/timers/fetch.
+Tests repeated timestamps, phase boundaries, both talkers, smooth gains/correlations,
+six finite bounded traces, draw calls, no demo fetches, late real successes/errors,
+rapid mode round trips, immediate exit cleanup, offline real mode and recovery.
+Node is optional on other machines (T09 explicitly skips if absent); it was present
+and this test passed here. No new dependency or JS testing framework was introduced.
+
+**Scope:** UI-002-T01/T02 replace generic planned contract placeholders with the
+user's explicit Demo Mode test mapping. Earlier run history stays intact. Visual
+browser review and hardware/backend integration are not part of this test run.

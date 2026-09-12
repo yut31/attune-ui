@@ -20,6 +20,13 @@
   .system{border:1px solid var(--line);border-radius:30px;padding:9px 15px;
     color:var(--mute);font-size:14px;white-space:nowrap}
   .system[data-state="running"]{color:var(--good);border-color:#366c61;background:#122d29}
+  .system-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  #demoToggle{font:inherit;font-size:14px;color:var(--ink);background:#203447;
+    border:1px solid #61778f;border-radius:24px;padding:10px 16px;cursor:pointer}
+  #demoToggle:focus-visible{outline:2px solid var(--good);outline-offset:3px}
+  #demoDisclosure{padding:16px 22px;border:1px solid #a78a54;border-radius:14px;
+    background:#302b20;color:#ffe0a3;font-size:15px}
+  #demoDisclosure strong{display:block;letter-spacing:.08em;margin-bottom:4px}
   .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:currentColor;margin-right:8px}
   main{display:grid;gap:18px}
   .panel,.card{background:var(--panel);border:1px solid var(--line);border-radius:18px}
@@ -71,9 +78,12 @@
     <div class="brand"><span class="mark" aria-hidden="true">A</span><div>
       <h1>ATTUNE</h1><p class="subtitle">Neuro-Adaptive Hearing</p>
     </div></div>
-    <div class="system" id="systemStatus" role="status" data-state="waiting"><span class="dot"></span><span id="systemText">Connecting</span></div>
+    <div class="system-controls"><button id="demoToggle" type="button" aria-pressed="false" aria-controls="demoDisclosure">Start Demo</button>
+    <div class="system" id="systemStatus" role="status" data-state="waiting"><span class="dot"></span><span id="systemText">Connecting</span></div></div>
   </header>
   <main>
+    <aside id="demoDisclosure" role="status" hidden><strong>DEMO MODE · SIMULATED DATA</strong>
+      All values and traces are synthetic illustrations, not participant measurements or physiologically accurate EEG. No audio is played.</aside>
     <section class="panel attention" aria-labelledby="attentionHeading">
       <div><h2 class="eyebrow" id="attentionHeading">Current attention</h2>
         <div class="banner" id="banner" role="status">Waiting for the listener…</div>
@@ -107,7 +117,7 @@
       <div class="section-heading"><h2 id="eegHeading">Live EEG activity</h2><span class="monitor-label" id="eegStatus">Awaiting samples</span></div>
       <div class="screen"><canvas id="eeg" width="1040" height="170" role="img" aria-label="EEG brain activity traces">Live EEG traces from the listener.</canvas>
         <div class="empty" id="eegEmpty">Waiting for EEG samples</div></div>
-      <p class="hint">Brain activity used to decode attention · normalized channel traces</p>
+      <p class="hint" id="eegDescription">Brain activity used to decode attention · normalized channel traces</p>
     </section>
     <section class="panel session" aria-labelledby="sessionHeading">
       <h2 id="sessionHeading">Session information</h2>
@@ -170,9 +180,61 @@
     }
     $("needle").style.left = "50%";
   }
+  // Pure visualization data: a 16-second cycle, independent of update count.
+  function demoState(t){
+    const phase = t % 16;
+    const blend = x => (1 - Math.cos(Math.PI*x))/2;
+    const towardB = phase < 6 ? 0 : phase < 8 ? blend((phase-6)/2)
+      : phase < 14 ? 1 : 1-blend((phase-14)/2);
+    const traces = Array.from({length:6}, (_, channel) =>
+      Array.from({length:128}, (_, sample) => {
+        const time = t + sample/64;
+        return 0.7*Math.sin(time*2*Math.PI*(2+channel*0.25)+channel)
+          + 0.2*Math.sin(time*2*Math.PI*5+channel*0.5);
+      }));
+    return {
+      eeg: traces, running: true, done: false, attended: towardB < 0.5 ? 0 : 1,
+      gain_a_db: -9*towardB, gain_b_db: -9*(1-towardB),
+      corr_a: 0.8-0.6*towardB, corr_b: 0.2+0.6*towardB,
+      correct_frac: 0, eeg_source: "Simulated EEG",
+      audio_source: "Simulated dual-talker audio (no playback)",
+      mode: "DEMO · simulated", t: t
+    };
+  }
+  let demoMode = false, demoStarted = 0, modeGeneration = 0;
+  function toggleDemo(){
+    demoMode = !demoMode;
+    modeGeneration++; // Invalidate real requests from before either mode switch.
+    demoStarted = performance.now();
+    $("demoToggle").textContent = demoMode ? "Exit Demo" : "Start Demo";
+    $("demoToggle").setAttribute("aria-pressed", String(demoMode));
+    $("demoDisclosure").hidden = !demoMode;
+    eeg = [];
+    cx.clearRect(0,0,cv.width,cv.height);
+    $("eegEmpty").hidden = false;
+    $("eegHeading").textContent = demoMode ? "Simulated EEG activity" : "Live EEG activity";
+    $("eegDescription").textContent = demoMode
+      ? "Synthetic sine-wave illustration · not a physiological EEG model"
+      : "Brain activity used to decode attention · normalized channel traces";
+    cv.setAttribute("aria-label", demoMode ? "Simulated EEG illustration" : "EEG brain activity traces");
+    if(!demoMode){
+      clearCards("Waiting");
+      for(const id of ["eegSource","audioSource","sessionMode","elapsed","accuracy"]) $(id).textContent = "—";
+      systemStatus("waiting", "Connecting");
+      $("banner").textContent = "Waiting for the listener…";
+      $("attentionDetail").textContent = "Waiting for real backend data.";
+      $("eegStatus").textContent = "Awaiting samples";
+      $("footer").textContent = "ATTUNE · EEG-guided adaptive hearing · Waiting for session data";
+    }
+    tick();
+  }
+  $("demoToggle").addEventListener("click", toggleDemo);
   async function tick(){
+    const generation = modeGeneration;
     try{
-      const s = await (await fetch("/state",{cache:"no-store"})).json();
+      const s = demoMode ? demoState((performance.now()-demoStarted)/1000)
+        : await (await fetch("/state",{cache:"no-store"})).json();
+      if(generation !== modeGeneration) return;
       if(Array.isArray(s.eeg) && s.eeg.length) eeg = s.eeg;
       $("eegEmpty").hidden = eeg.length > 0;
       $("eegStatus").textContent = eeg.length ? (s.done ? "Final samples" : "EEG samples") : "Awaiting samples";
@@ -207,7 +269,15 @@
       const gap = (s.corr_a||0) - (s.corr_b||0);
       const pos = 50 - Math.tanh(gap*8)*46;
       $("needle").style.left = pos+"%";
+      if(demoMode){
+        systemStatus("demo", "Demo mode");
+        $("banner").textContent = "Simulated attention: Talker "+(s.attended===0 ? "A" : "B");
+        $("attentionDetail").textContent = "Illustrative attention cycle · no listener measurements or audio playback.";
+        $("eegStatus").textContent = "Simulated traces";
+        $("footer").textContent = "ATTUNE · EEG-guided adaptive hearing · DEMO MODE · SIMULATED DATA";
+      }
     }catch(e){
+      if(generation !== modeGeneration) return;
       systemStatus("waiting", "Disconnected");
       $("banner").textContent = "Waiting for the demo engine…";
       $("attentionDetail").textContent = "Reconnecting automatically. Session information shows the last received values.";

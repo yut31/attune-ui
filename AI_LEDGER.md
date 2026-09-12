@@ -271,3 +271,67 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.test_ui -v
 - No. No commits or pushes performed.
 
 ---
+
+
+### UI-002 — Deterministic ATTUNE Demo Mode
+
+**Agent:** Codex  
+**Status:** DONE  
+**Date:** 2026-09-11
+
+**Files changed**
+- neuro-attention/src/ui.html
+- tests/test_ui.py
+- tests/TEST_REGISTRY.md
+- AI_LEDGER.md
+
+**Behavior added**
+- Start Demo / Exit Demo button with pressed state and prominent
+  DEMO MODE · SIMULATED DATA disclosure, no participant/physiological claims and
+  no audio playback. Demo also labels attention, sources, EEG heading and footer.
+- Pure demoState(t) supplies exactly the existing 13 fields; a repeating 16-second
+  cycle favors A for 0–6 s, smoothly moves to B during 6–8 s, favors B for 8–14 s,
+  and smoothly returns to A during 14–16 s. Six bounded synthetic sine traces.
+- No randomness, hardware, dataset, backend or network needed for demo values.
+- Existing real /state polling interval, rendering and connection handling retained.
+  Demo stops new fetches and ignores pending real responses/errors. Exit clears
+  demo values, traces and labels synchronously and immediately polls real state.
+
+**Tests added**
+- UI-002-T01–T08: control/required IDs, disclosure, real endpoint, no randomness,
+  existing state contract, synthetic EEG, both attention states, ATTUNE branding.
+- UI-002-T09: executed JavaScript deterministic-helper and mode-isolation checks
+  using the already-installed Node executable with mocked browser facilities.
+- All UI-000/UI-001 tests retained without weakened assertions.
+
+**Exact commands and results**
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.test_ui -v
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
+```
+- Initial targeted run: 20 passed, 1 new test regex failure; fixed test identifier
+  parsing (numeric conditional operand was mistaken for a key).
+- Final targeted run: PASS, 21 tests, no skips.
+- Full discovery: 21 passed, 2 module import errors due to missing numpy in
+  existing test_combined/test_driving_pilot. Environment-blocked, not concealed.
+
+**Assumptions**
+- Demo gain range uses 0 to -9 dB, compatible with the existing gain meter mapping;
+  favored voice is louder without changing real gain behavior.
+- Accuracy is unavailable (correct_frac=0), avoiding a simulated accuracy claim.
+- Starting Demo resets elapsed demo time; equal elapsed times yield equal values.
+
+**Known limitations / remaining issues**
+- Full existing-suite verification requires its already-specified dependencies.
+- JS runtime test skips on machines without Node; all nine new tests ran here.
+- No browser visual review performed; mocked DOM/canvas tests verify logic.
+- Real mode initially attempts /state as before; pressing Start Demo works offline.
+
+**Recommended next task**
+- Human visual smoke review at laptop/presentation sizes; no UI-003 work started.
+
+**Human review needed**
+- No implementation blocker. Note existing Python environment limitation.
+- No dependencies installed, external services used, backend changes, commits or pushes.
+
+---

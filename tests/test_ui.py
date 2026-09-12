@@ -5,6 +5,8 @@ from html.parser import HTMLParser
 import importlib.util
 from pathlib import Path
 import re
+import shutil
+import subprocess
 import sys
 from types import ModuleType
 import unittest
@@ -185,6 +187,127 @@ class UIShellTests(unittest.TestCase):
         self.assertGreater(int(canvases[0]['height']), 0)
         self.assertTrue(canvases[0].get('aria-label'))
         self.assertIn('requestAnimationFrame(drawEEG)', self.script)
+
+
+
+class UIDemoTests(unittest.TestCase):
+    def setUp(self):
+        self.html = UI.read_text(encoding='utf-8')
+        self.ui = UIParser()
+        self.ui.feed(self.html)
+        self.ui.close()
+        self.script = '\n'.join(self.ui.scripts)
+        self.helper = self.script.split('function demoState(t){', 1)[1].split(
+            'let demoMode', 1)[0]
+
+    def test_ui_002_t01_demo_control_and_required_ids(self):
+        self.assertTrue(any(tag == 'button' and attrs.get('id') == 'demoToggle'
+                            for tag, attrs in self.ui.elements))
+        for element_id in ('banner', 'eeg', 'cardA', 'cardB', 'fillA', 'fillB',
+                           'dbA', 'dbB', 'statusA', 'statusB', 'needle', 'footer',
+                           'systemText'):
+            with self.subTest(element_id=element_id):
+                self.assertIn(element_id, self.ui.ids)
+
+    def test_ui_002_t02_simulated_disclosure(self):
+        self.assertIn('demoDisclosure', self.ui.ids)
+        self.assertIn('DEMO MODE · SIMULATED DATA', self.html)
+        self.assertIn('not participant measurements', self.html)
+        self.assertIn('No audio is played.', self.html)
+
+    def test_ui_002_t03_real_endpoint_preserved(self):
+        self.assertRegex(self.script, r'''\bfetch\s*\(\s*['"]/state['"]''')
+        self.assertIn('if(generation !== modeGeneration) return;', self.script)
+
+    def test_ui_002_t04_no_randomness(self):
+        self.assertNotRegex(self.script, r'Math\s*(?:\.\s*random|\[\s*[\'\"]random)')
+
+    def test_ui_002_t05_existing_demo_contract(self):
+        payload = self.helper.split('return {', 1)[1].split('};', 1)[0]
+        self.assertEqual(set(re.findall(r'\b([A-Za-z_]\w*)\s*:', payload)), set(STATE_FIELDS))
+        self.assertRegex(payload, r'correct_frac:\s*0\b')
+
+    def test_ui_002_t06_deterministic_eeg_source(self):
+        self.assertIn('Math.sin', self.helper)
+        self.assertRegex(self.helper, r'eeg:\s*traces')
+        self.assertIn('sample/64', self.helper)
+        self.assertNotIn('performance.now', self.helper)
+
+    def test_ui_002_t07_both_attention_states(self):
+        self.assertRegex(self.helper, r'attended:\s*towardB\s*<\s*0\.5\s*\?\s*0\s*:\s*1')
+        self.assertIn('t % 16', self.helper)
+
+    def test_ui_002_t08_attune_branding(self):
+        self.assertIn('ATTUNE', self.ui.headings)
+        self.assertIn('<title>ATTUNE — Neuro-Adaptive Hearing</title>', self.html)
+
+    @unittest.skipUnless(shutil.which('node'), 'Optional JS execution requires an existing Node executable')
+    def test_ui_002_t09_determinism_and_mode_isolation(self):
+        # Built-in Node VM only; fake clock, DOM, canvas, timers and fetch.
+        harness = r"""
+const fs = require('fs'), vm = require('vm'), assert = require('assert');
+const html = fs.readFileSync(process.argv[1], 'utf8');
+const elements = Object.fromEntries([...html.matchAll(/id="([^"]+)"/g)].map(m =>
+  [m[1], {textContent:'',style:{},dataset:{},hidden:false,attributes:{},listeners:{},
+    classList:{toggle(){}},lastElementChild:{textContent:''},
+    setAttribute(k,v){this.attributes[k]=v},addEventListener(k,v){this.listeners[k]=v}}]));
+let draws=0, clock=1000, requests=[], timers=[];
+elements.eeg.getContext=()=>({setTransform(){},clearRect(){},beginPath(){},
+  lineTo(x,y){assert(Number.isFinite(x)&&Number.isFinite(y));draws++},moveTo(){},stroke(){}});
+elements.eeg.getBoundingClientRect=()=>({width:1040});
+const context=vm.createContext({document:{getElementById:id=>{assert(elements[id],id);return elements[id]}},
+  performance:{now:()=>clock},devicePixelRatio:1,addEventListener(){},requestAnimationFrame(){},
+  setInterval(fn,ms){assert.equal(ms,80);timers.push(fn)},
+  fetch:url=>{assert.equal(url,'/state');return new Promise((resolve,reject)=>requests.push({resolve,reject}))}});
+const run=code=>vm.runInContext(code,context);
+run(html.match(/<script>([\s\S]*?)<\/script>/)[1]);
+const state=t=>JSON.parse(run(`JSON.stringify(demoState(${t}))`));
+const keys=['eeg','running','done','attended','gain_a_db','gain_b_db','corr_a','corr_b',
+ 'correct_frac','eeg_source','audio_source','mode','t'].sort();
+for(const t of [0,6,6.5,7,7.5,8,14,15,16,32,100.125]){
+ const s=state(t);assert.deepStrictEqual(s,state(t));assert.deepStrictEqual(Object.keys(s).sort(),keys);
+ assert.equal(s.t,t);assert.equal(s.correct_frac,0);assert.equal(s.eeg.length,6);
+ s.eeg.forEach(ch=>{assert.equal(ch.length,128);ch.forEach(x=>assert(Number.isFinite(x)&&Math.abs(x)<=0.900001))});
+}
+for(const t of [0,3,6,16,32]){const s=state(t);assert.equal(s.attended,0);assert(s.corr_a>s.corr_b);assert(s.gain_a_db>s.gain_b_db)}
+for(const t of [8,10,14,24]){const s=state(t);assert.equal(s.attended,1);assert(s.corr_b>s.corr_a);assert(s.gain_b_db>s.gain_a_db)}
+for(const t of [6,7,8,14,15,16]){
+ const a=state(t-0.0001),b=state(t+0.0001);
+ for(const k of ['gain_a_db','gain_b_db','corr_a','corr_b'])assert(Math.abs(a[k]-b[k])<0.002);
+}
+assert.notDeepStrictEqual(state(0).eeg,state(0.08).eeg);
+const flush=async()=>{for(let i=0;i<8;i++)await Promise.resolve()};
+(async()=>{
+ assert.equal(requests.length,1);
+ // Leave another old real request pending to exercise both success and failure races.
+ const old=run('tick()');assert.equal(requests.length,2);
+ elements.demoToggle.listeners.click();
+ assert.equal(elements.demoDisclosure.hidden,false);assert.equal(elements.demoToggle.attributes['aria-pressed'],'true');
+ assert.equal(elements.banner.textContent,'Simulated attention: Talker A');
+ clock=11000;await timers[0]();assert.equal(elements.banner.textContent,'Simulated attention: Talker B');
+ assert.equal(requests.length,2);run('drawEEG()');assert(draws>0);
+ requests[0].resolve({json:async()=>({...state(0),mode:'REAL'})});
+ requests[1].reject(Error('old request failed'));await old;await flush();
+ assert.equal(elements.systemText.textContent,'Demo mode');assert.equal(elements.banner.textContent,'Simulated attention: Talker B');
+ elements.demoToggle.listeners.click();assert.equal(requests.length,3);
+ assert.equal(elements.demoDisclosure.hidden,true);assert.equal(elements.eegSource.textContent,'—');
+ assert.equal(elements.dbA.textContent,'— dB');assert.equal(elements.sessionMode.textContent,'—');
+ assert.equal(elements.eegHeading.textContent,'Live EEG activity');assert.equal(run('eeg.length'),0);
+ requests[2].reject(Error('backend unavailable'));await flush();assert.equal(elements.systemText.textContent,'Disconnected');
+ const real=run('tick()');requests[3].resolve({json:async()=>({...state(0),mode:'REAL',eeg_source:'recorded trial'})});
+ await real;assert.equal(elements.systemText.textContent,'System running');assert.equal(elements.banner.textContent,'Attending to Talker A');
+ assert.equal(elements.sessionMode.textContent,'REAL');
+ // Rapid round trip must also invalidate a real response from the previous generation.
+ const stale=run('tick()');elements.demoToggle.listeners.click();elements.demoToggle.listeners.click();
+ requests[4].resolve({json:async()=>state(10)});await stale;
+ assert.equal(elements.systemText.textContent,'Connecting');assert.equal(elements.sessionMode.textContent,'—');
+ requests[5].reject(Error('offline'));await flush();
+ assert.equal(timers.length,1);
+})().catch(e=>{console.error(e);process.exitCode=1});
+"""
+        result = subprocess.run([shutil.which('node'), '-e', harness, str(UI)],
+                                capture_output=True, text=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
 if __name__ == '__main__':
