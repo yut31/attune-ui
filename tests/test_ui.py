@@ -546,5 +546,119 @@ console.log(JSON.stringify(snapshots));
             self.assertEqual(snapshot, ['—', 'Not connected', '0%'])
 
 
+
+class UIHistoryTests(unittest.TestCase):
+    setUp = UIVigilanceTests.setUp
+    run_js = UIVigilanceTests.run_js
+
+    def test_ui_005_t01_section(self):
+        self.assertIn('sessionHistory', self.ui.ids)
+        self.assertIn('Session History', self.ui.headings)
+
+    def test_ui_005_t02_attention_labels(self):
+        self.assertIn('attentionHistory', self.ui.ids)
+        self.assertIn('A = Talker A · B = Talker B', self.html)
+
+    def test_ui_005_t03_vigilance_history(self):
+        self.assertIn('lapseHistory', self.ui.ids)
+        self.assertIn('lapseHistoryStatus', self.ui.ids)
+
+    def test_ui_005_t04_signal_history(self):
+        self.assertIn('signalHistory', self.ui.ids)
+        self.assertIn('Striped bars = simulated artifact periods', self.script)
+
+    def test_ui_005_t05_determinism(self):
+        values = self.run_js(r"""
+console.log(JSON.stringify([0,1.2,29.9,30,50.5,1000].map(t=>[
+ run(`demoHistory(${t})`),run(`demoHistory(${t})`)])));
+""")
+        for first, second in values:
+            self.assertEqual(first, second)
+            self.assertTrue(all(0 <= p['lapse'] <= 1 and 0 <= p['quality'] <= 1 for p in first))
+
+    def test_ui_005_t06_bounded_history(self):
+        values = self.run_js(r"""
+for(let i=0;i<1000;i++){run(`recordAttention(${i},0)`);run(`recordAttention(${i},1)`)}
+const real=run('realHistory.slice()');
+run('recordAttention(1100,null)');
+console.log(JSON.stringify([run('demoHistory(0)'),run('demoHistory(1000)'),real,run('realHistory')]));
+""")
+        self.assertEqual(len(values[0]), 1)
+        for points in values[1:3]:
+            self.assertEqual(len(points), 30)
+            self.assertEqual(len({p['time'] for p in points}), 30)
+            self.assertEqual(points[-1]['time']-points[0]['time'], 29)
+        self.assertEqual(values[3], [])
+        self.assertNotIn('localStorage', self.script)
+
+    def test_ui_005_t07_reuses_helpers(self):
+        result = self.run_js(r"""
+console.log(JSON.stringify(run('demoHistory(40).every(p => p.attended === demoState(p.time).attended && p.lapse === demoLapseRisk(p.time) && p.quality === demoSignal(p.time).quality && p.artifact === demoSignal(p.time).artifact)')));
+""")
+        self.assertTrue(result)
+
+    def test_ui_005_t08_no_randomness(self):
+        self.assertNotRegex(self.script, r'Math\s*(?:\.\s*random|\[\s*[\'\"]random)')
+
+    def real_history_snapshot(self):
+        return self.run_js(r"""
+run('resetHistory()');
+requests[0].resolve({json:async()=>JSON.parse(run('JSON.stringify(demoState(10))'))});
+await flush();
+console.log(JSON.stringify([elements.lapseHistory.innerHTML,elements.lapseHistoryStatus.textContent,
+ elements.signalHistory.innerHTML,elements.signalHistoryStatus.textContent,run('realHistory')]));
+""")
+
+    def test_ui_005_t09_real_vigilance_unavailable(self):
+        values = self.real_history_snapshot()
+        self.assertEqual(values[:2], ['', 'Awaiting pipeline'])
+        self.assertEqual(set(values[4][0]), {'time', 'attended'})
+
+    def test_ui_005_t10_real_signal_unavailable(self):
+        self.assertEqual(self.real_history_snapshot()[2:4], ['', 'Awaiting pipeline'])
+
+    def test_ui_005_t11_contract(self):
+        self.assertEqual(set(load_live_demo().STATE), set(STATE_FIELDS))
+        self.assertEqual(set(re.findall(r'\bs\s*\.\s*(\w+)', self.script)), set(STATE_FIELDS))
+
+    def test_ui_005_t12_preserved_features(self):
+        for heading in ('ATTUNE','Talker A','Talker B','Vigilance','Signal quality','Live EEG activity'):
+            self.assertIn(heading,self.ui.headings)
+        for element_id in ('eeg','demoToggle','demoDisclosure'):
+            self.assertIn(element_id,self.ui.ids)
+
+    def test_ui_005_t13_exit_clears_and_real_recovers(self):
+        values = self.run_js(r"""
+run('toggleDemo()');clock=31000;await run('tick()');
+const demo=[elements.historyMode.textContent,elements.attentionHistory.innerHTML,
+ elements.lapseHistory.innerHTML,elements.signalHistory.innerHTML];
+run('toggleDemo()');
+const cleared=[elements.attentionHistory.innerHTML,elements.lapseHistory.innerHTML,
+ elements.signalHistory.innerHTML,run('realHistory.length'),elements.historyMode.textContent];
+// Old real response after the round trip must not populate history.
+requests[0].resolve({json:async()=>JSON.parse(run('JSON.stringify(demoState(0))'))});
+await flush();const stale=run('realHistory.length');
+requests[1].resolve({json:async()=>JSON.parse(run('JSON.stringify(demoState(10))'))});
+await flush();const real=run('realHistory');
+console.log(JSON.stringify([demo,cleared,stale,real,elements.lapseHistory.innerHTML,elements.signalHistory.innerHTML]));
+""")
+        self.assertIn('SIMULATED', values[0][0])
+        self.assertTrue(all(values[0][1:]))
+        self.assertIn('artifact', values[0][3])
+        self.assertEqual(values[1][:4], ['', '', '', 0])
+        self.assertNotIn('SIMULATED', values[1][4])
+        self.assertEqual(values[2], 0)
+        self.assertEqual(values[3], [{'time':31,'attended':1}])
+        self.assertEqual(values[4:], ['', ''])
+
+    def test_ui_005_t14_no_external_dependencies(self):
+        for tag, attrs in self.ui.elements:
+            if tag == 'script':
+                self.assertNotIn('src', attrs)
+            if tag == 'link':
+                self.assertNotIn('href', attrs)
+        self.assertNotRegex(self.script, r'\bimport\s*(?:\(|.*from)')
+
+
 if __name__ == '__main__':
     unittest.main()

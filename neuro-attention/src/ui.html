@@ -78,6 +78,16 @@
   #qualityFill{height:100%;width:0;background:var(--good)}
   .signal[data-quality="fair"] #qualityFill{background:#e2c17d}
   .signal[data-quality="poor"] #qualityFill{background:#e7a18d}
+  .history{padding:22px 24px}
+  .history-row{display:grid;grid-template-columns:130px minmax(0,1fr);gap:14px;align-items:center;margin-top:12px}
+  .history-track{display:flex;align-items:flex-end;gap:2px;height:44px;background:#0b1420;border-radius:6px;overflow:hidden}
+  .history-track:empty{display:none}
+  .history-bin{flex:1;min-width:0;text-align:center;font-size:11px;color:#0b111b;background:var(--good)}
+  .history-bin.talker-a{background:var(--a)}.history-bin.talker-b{background:var(--b)}
+  .history-bin.artifact{background:repeating-linear-gradient(45deg,#e7a18d 0 3px,#9d685b 3px 5px)}
+  .history-bin.gap{background:transparent}
+  .history .hint{font-size:12px}
+  @media(max-width:540px){.history-row{grid-template-columns:1fr;gap:5px}.history{padding:20px 16px}}
   .session{padding:22px 24px}dl{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:20px;margin:16px 0 0}
   dt{font-size:12px;color:var(--mute);margin-bottom:6px}dd{margin:0;font-size:16px;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
   footer{color:var(--mute);font-size:12px;margin-top:20px;text-align:center}
@@ -153,6 +163,21 @@
         <div class="empty" id="eegEmpty">Waiting for EEG samples</div></div>
       <p class="hint" id="eegDescription">Brain activity used to decode attention · normalized channel traces</p>
     </section>
+    <section class="panel history" id="sessionHistory" aria-labelledby="historyHeading">
+      <div class="section-heading"><h2 id="historyHeading">Session History</h2><span class="hint">Last 30 s · 1 s samples</span></div>
+      <p class="hint" id="historyMode">Real session · attention observations only</p>
+      <div class="history-row"><h3 class="eyebrow">Attention</h3><div>
+        <div class="history-track" id="attentionHistory" role="img" aria-label="Attention history: awaiting observations"></div>
+        <p class="hint" id="attentionHistoryStatus">Awaiting attention observations</p></div></div>
+      <div class="history-row"><h3 class="eyebrow">Lapse risk</h3><div>
+        <div class="history-track" id="lapseHistory" role="img" aria-label="Lapse-risk history unavailable"></div>
+        <p class="hint" id="lapseHistoryStatus">Awaiting pipeline</p></div></div>
+      <div class="history-row"><h3 class="eyebrow">Signal quality</h3><div>
+        <div class="history-track" id="signalHistory" role="img" aria-label="Signal-quality history unavailable"></div>
+        <p class="hint" id="signalHistoryStatus">Awaiting pipeline</p></div></div>
+      <p class="hint">A = Talker A · B = Talker B · oldest → newest · gaps = no observation</p>
+      <p class="hint" id="historyLegend">Lapse risk and signal quality are not connected.</p>
+    </section>
     <section class="panel session" aria-labelledby="sessionHeading">
       <h2 id="sessionHeading">Session information</h2>
       <dl><div><dt>EEG source</dt><dd id="eegSource">—</dd></div>
@@ -213,6 +238,70 @@
       $("status"+L).lastElementChild.textContent = label;
     }
     $("needle").style.left = "50%";
+  }
+  const HISTORY_LIMIT = 30; // One-second bins; in-memory only, never persisted.
+  let realHistory = [], historySecond = null;
+  function demoHistory(t){
+    const end = Math.floor(t);
+    return Array.from({length:Math.min(HISTORY_LIMIT,end+1)}, (_,i) => {
+      const time = Math.max(0,end-HISTORY_LIMIT+1)+i;
+      const signal = demoSignal(time);
+      return {time, attended:demoState(time).attended, lapse:demoLapseRisk(time),
+        quality:signal.quality, artifact:signal.artifact};
+    });
+  }
+  function recordAttention(time, attended){
+    realHistory = realHistory.filter(point => point.time > time-HISTORY_LIMIT);
+    if((attended === 0 || attended === 1) && !realHistory.some(point => point.time === time)){
+      realHistory.push({time, attended});
+      realHistory = realHistory.slice(-HISTORY_LIMIT);
+    }
+    return realHistory;
+  }
+  function historyBars(id, points, end, metric){
+    const bins = Array.from({length:HISTORY_LIMIT}, (_,i) => {
+      const point = points.find(item => item.time === end-HISTORY_LIMIT+1+i);
+      if(!point) return '<span class="history-bin gap" style="height:2px"></span>';
+      const attention = metric === 'attended';
+      const value = attention ? (point.attended === 0 ? 'A' : 'B') : Math.round(point[metric]*100)+'%';
+      const type = attention ? (point.attended === 0 ? ' talker-a' : ' talker-b')
+        : metric === 'quality' && point.artifact ? ' artifact' : '';
+      const height = attention ? 100 : Math.max(2,point[metric]*100);
+      return '<span class="history-bin'+type+'" style="height:'+height+'%" title="'+point.time+' s: '+value+'">'+(attention ? value : '')+'</span>';
+    });
+    $(id).innerHTML = bins.join('');
+    $(id).setAttribute('aria-label', (demoMode ? 'Simulated ' : 'Real ') + metric + ' history: '+
+      points.map(point => point.time+' s '+(metric === 'attended' ? (point.attended === 0 ? 'Talker A' : 'Talker B')
+        : Math.round(point[metric]*100)+'%'+(metric === 'quality' && point.artifact ? ' artifact' : ''))).join(', '));
+  }
+  function resetHistory(){
+    realHistory = [];
+    historySecond = null;
+    for(const id of ['attentionHistory','lapseHistory','signalHistory']){
+      $(id).innerHTML = '';
+      $(id).setAttribute('aria-label','History unavailable');
+    }
+    $('historyMode').textContent = demoMode ? 'DEMO MODE · SIMULATED HISTORY' : 'Real session · attention observations only';
+    $('attentionHistoryStatus').textContent = 'Awaiting attention observations';
+    $('lapseHistoryStatus').textContent = 'Awaiting pipeline';
+    $('signalHistoryStatus').textContent = 'Awaiting pipeline';
+    $('historyLegend').textContent = demoMode ? 'Striped bars = simulated artifact periods · no artifact rejection.'
+      : 'Lapse risk and signal quality are not connected.';
+  }
+  function updateHistory(state = null){
+    const second = Math.floor(demoMode ? state.t : performance.now()/1000);
+    if(second === historySecond) return;
+    historySecond = second;
+    const points = demoMode ? demoHistory(second) : recordAttention(second,
+      state && state.running && !state.done ? state.attended : null);
+    historyBars('attentionHistory',points,second,'attended');
+    $('attentionHistoryStatus').textContent = points.length ? (demoMode ? 'Simulated A/B attention' : 'Observed A/B attention') : 'Awaiting attention observations';
+    if(demoMode){
+      historyBars('lapseHistory',points,second,'lapse');
+      historyBars('signalHistory',points,second,'quality');
+      $('lapseHistoryStatus').textContent = 'Simulated lapse risk · 0–100%';
+      $('signalHistoryStatus').textContent = 'Simulated EEG quality · 0–100%';
+    }
   }
   // Frontend illustration only: quality falls from .95 to .25 and recovers over 20 s.
   // Artifact interval is a separate time condition near the low-quality trough.
@@ -294,6 +383,7 @@
   function toggleDemo(){
     demoMode = !demoMode;
     modeGeneration++; // Invalidate real requests from before either mode switch.
+    resetHistory();
     demoStarted = performance.now();
     $("demoToggle").textContent = demoMode ? "Exit Demo" : "Start Demo";
     $("demoToggle").setAttribute("aria-pressed", String(demoMode));
@@ -326,6 +416,7 @@
       const s = demoMode ? demoState((performance.now()-demoStarted)/1000)
         : await (await fetch("/state",{cache:"no-store"})).json();
       if(generation !== modeGeneration) return;
+      updateHistory(s);
       paintVigilance(demoMode ? s.t : null);
       paintSignal(demoMode ? s.t : null);
       if(Array.isArray(s.eeg) && s.eeg.length) eeg = s.eeg;

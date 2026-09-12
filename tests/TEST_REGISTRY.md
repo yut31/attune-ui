@@ -61,8 +61,20 @@ Every test added by any human or AI must be registered here.
 | UI-004-T10 | Signal-quality display | unit | tests/test_ui.py | test_ui_004_t10_backend_contract_unchanged | 13-field backend contract preserved; no inference from unrelated fields | PASS |
 | UI-004-T11 | Signal-quality display | unit | tests/test_ui.py | test_ui_004_t11_existing_features | ATTUNE, vigilance, talkers, EEG and demo remain | PASS |
 | UI-004-T12 | Signal-quality display | unit | tests/test_ui.py | test_ui_004_t12_exit_resets_quality_and_artifact | demo exit immediately resets metrics; offline/recovery and pending-response isolation verified | PASS |
-| UI-005-T01 | signal quality | unit/component | TBD | good quality | GOOD state | PLANNED |
-| UI-005-T02 | artifact state | unit/component | TBD | artifact true | warning shown | PLANNED |
+| UI-005-T01 | Session History | unit | tests/test_ui.py | test_ui_005_t01_section | Session History exists | PASS |
+| UI-005-T02 | Session History | unit | tests/test_ui.py | test_ui_005_t02_attention_labels | attention history with visible A/B legend | PASS |
+| UI-005-T03 | Session History | unit | tests/test_ui.py | test_ui_005_t03_vigilance_history | lapse history exists | PASS |
+| UI-005-T04 | Session History | unit | tests/test_ui.py | test_ui_005_t04_signal_history | signal history and artifact stripe legend exist | PASS |
+| UI-005-T05 | Session History | unit | tests/test_ui.py | test_ui_005_t05_determinism | equal demo time produces equal bounded values | PASS |
+| UI-005-T06 | Session History | unit | tests/test_ui.py | test_ui_005_t06_bounded_history | 30 one-second samples maximum; duplicates ignored and expired samples removed | PASS |
+| UI-005-T07 | Session History | unit | tests/test_ui.py | test_ui_005_t07_reuses_helpers | history values match existing demo helpers | PASS |
+| UI-005-T08 | Session History | unit | tests/test_ui.py | test_ui_005_t08_no_randomness | no Math.random | PASS |
+| UI-005-T09 | Session History | unit | tests/test_ui.py | test_ui_005_t09_real_vigilance_unavailable | real lapse history empty and awaiting pipeline | PASS |
+| UI-005-T10 | Session History | unit | tests/test_ui.py | test_ui_005_t10_real_signal_unavailable | real signal history empty and awaiting pipeline | PASS |
+| UI-005-T11 | Session History | unit | tests/test_ui.py | test_ui_005_t11_contract | existing backend fields unchanged | PASS |
+| UI-005-T12 | Session History | unit | tests/test_ui.py | test_ui_005_t12_preserved_features | existing ATTUNE dashboard and demo preserved | PASS |
+| UI-005-T13 | Session History | unit | tests/test_ui.py | test_ui_005_t13_exit_clears_and_real_recovers | simulated rows cleared immediately; stale responses ignored; real attention resumes | PASS |
+| UI-005-T14 | Session History | unit | tests/test_ui.py | test_ui_005_t14_no_external_dependencies | no external script/link/import dependency | PASS |
 | UI-006-T01 | history | unit | TBD | append values | values remain ordered | PLANNED |
 | UI-006-T02 | history | unit | TBD | maximum history size | oldest values removed | PLANNED |
 | UI-007-T01 | transport | integration | TBD | valid WebSocket message | UI receives payload | PLANNED |
@@ -299,3 +311,35 @@ no EEG assessment or artifact rejection. Real mode remains unavailable.
 
 **Registry note:** UI-004-T01/T02 generic planned attention-card placeholders now
 follow this explicit signal-quality task mapping; historical runs retained.
+
+
+### 2026-09-11 — UI-005
+
+**Contributor:** Development workflow
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.test_ui -v
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
+```
+
+**Results:** UI PASS, 56 tests with no skips (42 preserved + 14 new).
+Discovery: 58 entries, 56 passed, 2 existing import errors:
+`ModuleNotFoundError: No module named 'numpy'` for test_combined/test_driving_pilot.
+No installs or changes to those tests.
+
+**Coverage:** UI-005-T01–T14 verify markup/labels, deterministic helper reuse,
+30-sample bound, duplicate prevention/expiry, no randomness/persistence,
+unavailable real metrics, unchanged contract, preserved UI, exit clearing,
+stale-response isolation, real recovery and no external chart resources.
+Runtime checks use existing Node and mocked browser facilities; all ran here.
+They skip if Node is absent on another machine. No browser visual review performed.
+
+**Design:** Native HTML/CSS rows, A/B text per attention bin, lapse/quality bars,
+striped artifact bins, text legend and accessible per-sample descriptions.
+One-second resolution, maximum 30 samples/row, updated at most once per second.
+Demo reconstructs integer-second history from elapsed time, starting at zero;
+real history uses browser receipt-time seconds and only observed running attention.
+Missing observations remain gaps. No real lapse/quality/artifact values generated.
+
+**Registry note:** UI-005-T01/T02 generic planned signal/artifact placeholders now
+follow the user's explicit history-task mapping. Historical entries retained.

@@ -458,3 +458,66 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 - No backend/model/preprocessing changes, installs, commits or pushes.
 
 ---
+
+
+### UI-005 — ATTUNE Session History / Timeline
+
+**Contributor:** Development workflow
+**Status:** DONE
+**Date:** 2026-09-11
+
+**Exact files changed**
+- neuro-attention/src/ui.html
+- tests/test_ui.py
+- tests/TEST_REGISTRY.md
+- AI_LEDGER.md
+
+**History design and behavior**
+- Compact native HTML/CSS attention, lapse-risk and signal-quality rows.
+- Visible A/B labels; artifact stripes with explanatory legend; accessible
+  per-sample descriptions. No external chart library or new canvas dependency.
+- Last 30 seconds: at most 30 one-second samples, rendering at most once/second.
+  Demo starts with elapsed samples only, leaving earlier slots empty.
+- Demo rebuilds history from floor(elapsed time) using demoState, demoLapseRisk
+  and demoSignal. Explicit SIMULATED HISTORY label and existing demo disclosure.
+- Real Mode records only observed running A/B attention using browser receipt-time
+  seconds. No backfilling; gaps represent missing observations. Lapse and quality
+  histories remain empty with Awaiting pipeline. No added backend fields.
+- Mode switches clear all rows and in-memory observations synchronously. Pending
+  responses retain existing generation protection. No localStorage/persistence.
+
+**Tests added**
+- UI-005-T01–T14: section, labeled attention, lapse/signal rows, determinism,
+  bounded history, existing helper reuse, no randomness, real unavailability,
+  contract preservation, existing features, exit clearing and no dependencies.
+- All UI-000 through UI-004 tests preserved unchanged.
+
+**Exact commands / results**
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.test_ui -v
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
+```
+- UI: PASS, 56 tests, no skips.
+- Discovery: 56 passed; 2 existing import errors from missing numpy for
+  test_combined/test_driving_pilot. No dependency installation or test hiding.
+
+**Assumptions**
+- Real history is page-local observation history, not backend historical replay.
+- First eligible observation per second is retained; mode changes reset history.
+- Demo helper calls are explicitly bounded to 30 samples once per second;
+  demoState is reused directly to avoid conflicting attention formulas.
+
+**Limitations**
+- One-second sampling can omit faster changes. Refresh/mode switch resets history.
+- Browser visual review remains outstanding. Existing Node VM tests ran here;
+  optional runtime checks skip on machines without Node.
+- Full existing suite remains blocked by the known Python dependency environment.
+
+**Recommended next task**
+- Human visual review at demo presentation sizes; UI-006 not started.
+
+**Human review needed**
+- No implementation blocker. No backend/model/preprocessing changes, installs,
+  commits or pushes.
+
+---
