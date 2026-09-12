@@ -49,8 +49,18 @@ Every test added by any human or AI must be registered here.
 | UI-003-T07 | Vigilance display | unit | tests/test_ui.py | test_ui_003_t07_display_thresholds | Attentive below .4, Watch from .4 to below .7, Elevated lapse risk from .7 | PASS |
 | UI-003-T08 | Vigilance display | unit | tests/test_ui.py | test_ui_003_t08_contract_unchanged | existing state keys unchanged; no lapse_score required or auditory inference | PASS |
 | UI-003-T09 | Vigilance display | unit | tests/test_ui.py | test_ui_003_t09_existing_shell_preserved | ATTUNE, talkers, EEG and demo disclosure/control remain | PASS |
-| UI-004-T01 | attention card | component | TBD | focused prediction | correct value and state | PLANNED |
-| UI-004-T02 | attention card | component | TBD | no data | placeholder state | PLANNED |
+| UI-004-T01 | Signal-quality display | unit | tests/test_ui.py | test_ui_004_t01_signal_section | signal-quality section exists | PASS |
+| UI-004-T02 | Signal-quality display | unit | tests/test_ui.py | test_ui_004_t02_quality_display | EEG quality text and meter exist | PASS |
+| UI-004-T03 | Signal-quality display | unit | tests/test_ui.py | test_ui_004_t03_artifact_display | artifact status text exists | PASS |
+| UI-004-T04 | Signal-quality display | unit | tests/test_ui.py | test_ui_004_t04_real_unavailable | real mode displays unavailable and no invented values | PASS |
+| UI-004-T05 | Signal-quality display | unit | tests/test_ui.py | test_ui_004_t05_deterministic_quality | identical elapsed times produce identical quality/artifact results | PASS |
+| UI-004-T06 | Signal-quality display | unit | tests/test_ui.py | test_ui_004_t06_quality_bounds_and_smoothness | quality is bounded 0..1 and smooth | PASS |
+| UI-004-T07 | Signal-quality display | unit | tests/test_ui.py | test_ui_004_t07_quality_thresholds | Good >= .75, Fair >= .45 and < .75, Poor < .45 | PASS |
+| UI-004-T08 | Signal-quality display | unit | tests/test_ui.py | test_ui_004_t08_artifact_interval | clean/artifact text and low-quality artifact interval boundaries verified | PASS |
+| UI-004-T09 | Signal-quality display | unit | tests/test_ui.py | test_ui_004_t09_no_randomness | no Math.random | PASS |
+| UI-004-T10 | Signal-quality display | unit | tests/test_ui.py | test_ui_004_t10_backend_contract_unchanged | 13-field backend contract preserved; no inference from unrelated fields | PASS |
+| UI-004-T11 | Signal-quality display | unit | tests/test_ui.py | test_ui_004_t11_existing_features | ATTUNE, vigilance, talkers, EEG and demo remain | PASS |
+| UI-004-T12 | Signal-quality display | unit | tests/test_ui.py | test_ui_004_t12_exit_resets_quality_and_artifact | demo exit immediately resets metrics; offline/recovery and pending-response isolation verified | PASS |
 | UI-005-T01 | signal quality | unit/component | TBD | good quality | GOOD state | PLANNED |
 | UI-005-T02 | artifact state | unit/component | TBD | artifact true | warning shown | PLANNED |
 | UI-006-T01 | history | unit | TBD | append values | values remain ordered | PLANNED |
@@ -258,3 +268,34 @@ contract and are never derived from auditory attention or EEG.
 **Registry note:** UI-003-T01/T02 generic planned demo-stream placeholders now
 follow the user's explicit vigilance-task mapping; past test history retained.
 No browser visual review performed.
+
+
+### 2026-09-11 — UI-004
+
+**Contributor:** Development workflow
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.test_ui -v
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
+```
+
+**Results:** UI suite PASS, 42 tests, no skips (30 preserved + 12 new).
+Discovery: 44 entries, 42 passed, 2 existing import errors:
+`ModuleNotFoundError: No module named 'numpy'` in test_combined and
+ test_driving_pilot. No dependencies installed or existing tests altered/skipped.
+
+**Coverage:** UI-004-T01–T12 cover markup, unavailable real mode, deterministic
+quality/artifacts, bounds/smoothness, exact label and artifact interval boundaries,
+no randomness, unchanged backend contract, existing features, immediate demo exit
+cleanup, late-response isolation, offline real mode and recovery. Runtime checks
+reuse the existing Node VM harness with mocked browser/network facilities.
+Node was already available and all checks executed; runtime tests skip if absent
+on another machine. No browser visual review performed.
+
+**Display assumptions:** Quality = .6 + .35*cos(2*pi*(t % 20)/20), range .25–.95.
+Good >= .75; Fair >= .45 and < .75; Poor < .45. Separate time condition marks
+artifact when 8 <= (t % 20) < 12, where quality is below .45. Simulation only;
+no EEG assessment or artifact rejection. Real mode remains unavailable.
+
+**Registry note:** UI-004-T01/T02 generic planned attention-card placeholders now
+follow this explicit signal-quality task mapping; historical runs retained.

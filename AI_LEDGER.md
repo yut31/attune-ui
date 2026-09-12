@@ -29,9 +29,9 @@ When a task is complete, remove its row from the active table and append a compl
 
 ### TEMPLATE — TASK-000
 
-**Agent:**  
+**Agent:**
 **Status:** DONE
-**Goal:**  
+**Goal:**
 
 **Files changed**
 - none
@@ -69,7 +69,7 @@ When a task is complete, remove its row from the active table and append a compl
 
 **Contributor:** Development workflow
 **Status:** DONE
-**Date:** 2026-09-11  
+**Date:** 2026-09-11
 **Goal:** Add test-only regression coverage before UI redesign.
 
 **Files changed**
@@ -127,7 +127,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 
 **Contributor:** Development workflow
 **Status:** DONE
-**Date:** 2026-09-11  
+**Date:** 2026-09-11
 **Goal:** Polish the existing live dashboard while preserving the backend contract.
 
 **Files changed**
@@ -187,7 +187,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 
 **Contributor:** Development workflow
 **Status:** DONE
-**Date:** 2026-09-11  
+**Date:** 2026-09-11
 **Goal:** Change only user-visible product branding from NOVA to ATTUNE.
 
 **Files changed**
@@ -394,5 +394,67 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 **Human review needed**
 - No implementation blocker; note the known full-suite environment limitation.
 - No backend/model/preprocessing edits, dependency installs, commits or pushes.
+
+---
+
+
+### UI-004 — ATTUNE Signal Quality / Artifact Status
+
+**Contributor:** Development workflow
+**Status:** DONE
+**Date:** 2026-09-11
+
+**Files changed**
+- neuro-attention/src/ui.html
+- tests/test_ui.py
+- tests/TEST_REGISTRY.md
+- AI_LEDGER.md
+
+**Behavior added**
+- Compact Signal quality panel with separate EEG quality meter/text and artifact
+  status. Text labels accompany colors; no flashing or large chart.
+- Real Mode shows Awaiting pipeline, quality dash, Not connected artifact status,
+  and Signal-quality processing not connected yet. Demo exit resets immediately.
+- Demo values and Clean / Artifact detected labels explicitly say simulated,
+  under the existing prominent disclosure. No active rejection or physiological
+  accuracy claims. No derivation from EEG, attention or vigilance.
+
+**Deterministic behavior / display thresholds**
+- Quality = .6 + .35*cos(2*pi*(t % 20)/20), smoothly cycling .95 to .25 and back.
+- Good >= .75; Fair >= .45 and < .75; Poor < .45. Display thresholds only.
+- Separate artifact time condition: 8 <= (t % 20) < 12; occurs below .45 quality.
+- Helpers use elapsed demo time only and stay outside the existing state payload.
+
+**Tests added**
+- UI-004-T01–T12: section, quality, artifact, real unavailability, determinism,
+  bounds/smoothness, quality thresholds, artifact intervals/text, no randomness,
+  unchanged contract, preserved features and demo exit cleanup/isolation.
+- All existing UI-000 through UI-003 tests retained without weakened assertions.
+
+**Tests run / results**
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.test_ui -v
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
+```
+- UI: PASS, 42 tests, no skips.
+- Discovery: 42 passed, 2 existing module import errors due to unavailable numpy
+  for test_combined/test_driving_pilot. Dependencies/tests unchanged.
+
+**Assumptions**
+- Signal-quality/artifact output is not exposed by /state; real values remain
+  unavailable until a separately authorized integration task.
+- Demo conditions are illustrations only, not actual artifact detection/rejection.
+
+**Limitations / remaining issues**
+- Browser visual review not performed. Runtime tests use the existing Node VM
+  harness and skip if Node is unavailable elsewhere; all executed here.
+- Full existing-suite validation remains blocked by the known Python environment.
+
+**Recommended next task**
+- Human visual smoke review; no UI-005 work started.
+
+**Human review needed**
+- No implementation blocker. Note full-suite environment limitation.
+- No backend/model/preprocessing changes, installs, commits or pushes.
 
 ---

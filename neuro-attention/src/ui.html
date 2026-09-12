@@ -70,6 +70,14 @@
   #lapseFill{height:100%;width:0;background:var(--good)}
   .vigilance[data-level="watch"] #lapseFill{background:#e2c17d}
   .vigilance[data-level="elevated"] #lapseFill{background:#e7a18d}
+  .signal{padding:20px 24px;display:flex;align-items:center;gap:24px;flex-wrap:wrap}
+  .signal-summary{flex:1;min-width:200px}
+  .signal-metric{flex:1;min-width:180px;max-width:320px}
+  #signalStatus{font-size:20px;margin:5px 0;color:var(--mute)}
+  #qualityValue,#artifactStatus{font-size:20px;margin-top:5px}
+  #qualityFill{height:100%;width:0;background:var(--good)}
+  .signal[data-quality="fair"] #qualityFill{background:#e2c17d}
+  .signal[data-quality="poor"] #qualityFill{background:#e7a18d}
   .session{padding:22px 24px}dl{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:20px;margin:16px 0 0}
   dt{font-size:12px;color:var(--mute);margin-bottom:6px}dd{margin:0;font-size:16px;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
   footer{color:var(--mute);font-size:12px;margin-top:20px;text-align:center}
@@ -128,6 +136,16 @@
         <p class="hint" id="vigilanceNote">Combined vigilance output not connected yet.</p></div>
       <div class="lapse"><h3 class="eyebrow">Lapse risk</h3><p id="lapseRisk">—</p>
         <div class="risk-track" aria-hidden="true"><div id="lapseFill"></div></div></div>
+    </section>
+    <section class="panel signal" id="signalQuality" aria-labelledby="signalHeading" data-quality="unavailable">
+      <div class="signal-summary"><h2 class="eyebrow" id="signalHeading">Signal quality</h2>
+        <p id="signalStatus">Awaiting pipeline</p>
+        <p class="hint" id="signalNote">Signal-quality processing not connected yet.</p></div>
+      <div class="signal-metric"><h3 class="eyebrow">EEG quality</h3>
+        <p id="qualityValue">—</p>
+        <div class="risk-track" aria-hidden="true"><div id="qualityFill"></div></div></div>
+      <div class="signal-metric"><h3 class="eyebrow">Artifact status</h3>
+        <p id="artifactStatus">Not connected</p></div>
     </section>
     <section class="panel monitor" aria-labelledby="eegHeading">
       <div class="section-heading"><h2 id="eegHeading">Live EEG activity</h2><span class="monitor-label" id="eegStatus">Awaiting samples</span></div>
@@ -196,6 +214,36 @@
     }
     $("needle").style.left = "50%";
   }
+  // Frontend illustration only: quality falls from .95 to .25 and recovers over 20 s.
+  // Artifact interval is a separate time condition near the low-quality trough.
+  function demoSignal(t){
+    const phase = t % 20;
+    return {quality: 0.6 + 0.35*Math.cos(2*Math.PI*phase/20),
+      artifact: phase >= 8 && phase < 12};
+  }
+  function qualityLabel(quality){
+    // Display-only thresholds; these do not perform EEG assessment or rejection.
+    return quality >= 0.75 ? "Good" : quality >= 0.45 ? "Fair" : "Poor";
+  }
+  function paintSignal(t = null){
+    if(t === null){
+      $("signalQuality").dataset.quality = "unavailable";
+      $("signalStatus").textContent = "Awaiting pipeline";
+      $("signalNote").textContent = "Signal-quality processing not connected yet.";
+      $("qualityValue").textContent = "—";
+      $("qualityFill").style.width = "0%";
+      $("artifactStatus").textContent = "Not connected";
+      return;
+    }
+    const sample = demoSignal(t);
+    const label = qualityLabel(sample.quality);
+    $("signalQuality").dataset.quality = label.toLowerCase();
+    $("signalStatus").textContent = "Simulated signal quality";
+    $("signalNote").textContent = "Time-based illustration only · no EEG assessment or artifact rejection is active.";
+    $("qualityValue").textContent = label+" · "+Math.round(100*sample.quality)+"% · simulated";
+    $("qualityFill").style.width = (100*sample.quality)+"%";
+    $("artifactStatus").textContent = (sample.artifact ? "Artifact detected" : "Clean")+" · simulated";
+  }
   // Frontend illustration only, separate from the auditory/backend state contract.
   // A 24-second cosine cycle rises from 0.1 to 0.9 and returns to 0.1.
   function demoLapseRisk(t){
@@ -260,6 +308,7 @@
     cv.setAttribute("aria-label", demoMode ? "Simulated EEG illustration" : "EEG brain activity traces");
     if(!demoMode){
       paintVigilance();
+      paintSignal();
       clearCards("Waiting");
       for(const id of ["eegSource","audioSource","sessionMode","elapsed","accuracy"]) $(id).textContent = "—";
       systemStatus("waiting", "Connecting");
@@ -278,6 +327,7 @@
         : await (await fetch("/state",{cache:"no-store"})).json();
       if(generation !== modeGeneration) return;
       paintVigilance(demoMode ? s.t : null);
+      paintSignal(demoMode ? s.t : null);
       if(Array.isArray(s.eeg) && s.eeg.length) eeg = s.eeg;
       $("eegEmpty").hidden = eeg.length > 0;
       $("eegStatus").textContent = eeg.length ? (s.done ? "Final samples" : "EEG samples") : "Awaiting samples";

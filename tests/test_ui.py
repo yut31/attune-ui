@@ -433,5 +433,118 @@ console.log(JSON.stringify([0,.399999,.4,.699999,.7,1].map(x=>run(`vigilanceLabe
         self.assertIn('DEMO MODE · SIMULATED DATA', self.html)
 
 
+
+class UISignalTests(unittest.TestCase):
+    # Reuse the existing offline harness without inheriting/duplicating its tests.
+    setUp = UIVigilanceTests.setUp
+    run_js = UIVigilanceTests.run_js
+
+    def test_ui_004_t01_signal_section(self):
+        self.assertTrue(any(tag == 'section' and attrs.get('id') == 'signalQuality'
+                            for tag, attrs in self.ui.elements))
+        self.assertIn('Signal quality', self.ui.headings)
+
+    def test_ui_004_t02_quality_display(self):
+        self.assertIn('EEG quality', self.ui.headings)
+        self.assertIn('qualityValue', self.ui.ids)
+        self.assertIn('qualityFill', self.ui.ids)
+
+    def test_ui_004_t03_artifact_display(self):
+        self.assertIn('Artifact status', self.ui.headings)
+        self.assertIn('artifactStatus', self.ui.ids)
+
+    def test_ui_004_t04_real_unavailable(self):
+        self.assertIn('<p id="qualityValue">—</p>', self.html)
+        self.assertIn('<p id="artifactStatus">Not connected</p>', self.html)
+        self.assertIn('Signal-quality processing not connected yet.', self.html)
+        values = self.run_js(r"""
+requests[0].resolve({json:async()=>JSON.parse(run('JSON.stringify(demoState(10))'))});
+await flush();
+console.log(JSON.stringify([elements.signalStatus.textContent,elements.qualityValue.textContent,
+ elements.artifactStatus.textContent,elements.qualityFill.style.width]));
+""")
+        self.assertEqual(values, ['Awaiting pipeline', '—', 'Not connected', '0%'])
+
+    def test_ui_004_t05_deterministic_quality(self):
+        values = self.run_js(r"""
+console.log(JSON.stringify([0,4,8,10,12,16,20,100.125].map(t=>[
+ run(`demoSignal(${t})`),run(`demoSignal(${t})`),run(`demoSignal(${t+20})`)])));
+""")
+        for first, repeated, cycle in values:
+            self.assertEqual(first, repeated)
+            self.assertAlmostEqual(first['quality'], cycle['quality'])
+            self.assertEqual(first['artifact'], cycle['artifact'])
+
+    def test_ui_004_t06_quality_bounds_and_smoothness(self):
+        values = self.run_js(r"""
+console.log(JSON.stringify(Array.from({length:2001},(_,i)=>run(`demoSignal(${i/50}).quality`))));
+""")
+        self.assertTrue(all(0 <= value <= 1 for value in values))
+        self.assertAlmostEqual(min(values), .25)
+        self.assertAlmostEqual(max(values), .95)
+        self.assertLess(max(abs(b-a) for a,b in zip(values,values[1:])), .003)
+
+    def test_ui_004_t07_quality_thresholds(self):
+        labels = self.run_js(r"""
+console.log(JSON.stringify([0,.449999,.45,.749999,.75,1].map(q=>run(`qualityLabel(${q})`))));
+""")
+        self.assertEqual(labels, ['Poor','Poor','Fair','Fair','Good','Good'])
+
+    def test_ui_004_t08_artifact_interval(self):
+        values = self.run_js(r"""
+const times=[0,7.999,8,10,11.999,12,20];
+console.log(JSON.stringify(times.map(t=>{
+ run(`paintSignal(${t})`);
+ return [run(`demoSignal(${t})`),elements.artifactStatus.textContent];
+})));
+""")
+        for (sample, text), artifact in zip(values, [False,False,True,True,True,False,False]):
+            self.assertEqual(sample['artifact'], artifact)
+            self.assertEqual(text, ('Artifact detected' if artifact else 'Clean')+' · simulated')
+            if artifact:
+                self.assertLess(sample['quality'], .45)
+
+    def test_ui_004_t09_no_randomness(self):
+        self.assertNotRegex(self.script, r'Math\s*(?:\.\s*random|\[\s*[\'\"]random)')
+
+    def test_ui_004_t10_backend_contract_unchanged(self):
+        self.assertEqual(set(load_live_demo().STATE), set(STATE_FIELDS))
+        self.assertEqual(set(re.findall(r'\bs\s*\.\s*(\w+)', self.script)), set(STATE_FIELDS))
+        self.assertIn('paintSignal(demoMode ? s.t : null)', self.script)
+        helper = self.script.split('function demoSignal(t){', 1)[1].split('function qualityLabel', 1)[0]
+        for field in ('eeg', 'corr_a', 'corr_b', 'attended', 'gain', 'correct_frac', 'lapse'):
+            self.assertNotIn(field, helper)
+
+    def test_ui_004_t11_existing_features(self):
+        for heading in ('ATTUNE', 'Vigilance', 'Talker A', 'Talker B', 'Live EEG activity'):
+            self.assertIn(heading, self.ui.headings)
+        for element_id in ('eeg', 'demoToggle', 'demoDisclosure', 'lapseRisk'):
+            self.assertIn(element_id, self.ui.ids)
+        self.assertIn('DEMO MODE · SIMULATED DATA', self.html)
+
+    def test_ui_004_t12_exit_resets_quality_and_artifact(self):
+        values = self.run_js(r"""
+const snapshots=[];
+const snapshot=()=>snapshots.push([elements.qualityValue.textContent,
+ elements.artifactStatus.textContent,elements.qualityFill.style.width]);
+run('toggleDemo()');clock=10000;await run('tick()');snapshot();
+// A pending real response cannot overwrite demo metrics.
+requests[0].resolve({json:async()=>JSON.parse(run('JSON.stringify(demoState(0))'))});
+await flush();snapshot();
+run('toggleDemo()');snapshot(); // Clear immediately, before backend response.
+requests[1].reject(Error('offline'));await flush();snapshot();
+const pending=run('tick()');
+requests[2].resolve({json:async()=>JSON.parse(run('JSON.stringify(demoState(10))'))});
+await pending;snapshot();
+console.log(JSON.stringify(snapshots));
+""")
+        self.assertIn('Poor', values[0][0])
+        self.assertIn('simulated', values[0][0])
+        self.assertEqual(values[0][1], 'Artifact detected · simulated')
+        self.assertEqual(values[0], values[1])
+        for snapshot in values[2:]:
+            self.assertEqual(snapshot, ['—', 'Not connected', '0%'])
+
+
 if __name__ == '__main__':
     unittest.main()
