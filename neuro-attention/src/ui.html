@@ -217,10 +217,36 @@
   }
   requestAnimationFrame(drawEEG);
 
+  // Backend boundary: null means unavailable, never a manufactured measurement.
+  function normalizeState(rawState){
+    const s = rawState !== null && typeof rawState === "object" && !Array.isArray(rawState) ? rawState : {};
+    const number = value => typeof value === "number" && Number.isFinite(value) ? value : null;
+    const text = value => typeof value === "string" ? value : "";
+    const elapsed = number(s.t), accuracy = number(s.correct_frac);
+    const traces = s.eeg;
+    const validEEG = Array.isArray(traces) && traces.length > 0 &&
+      Array.isArray(traces[0]) && traces[0].length >= 2 &&
+      traces.every(channel => Array.isArray(channel) && channel.length === traces[0].length &&
+        channel.every(value => number(value) !== null));
+    return {
+      running: s.running === true, done: s.done === true,
+      elapsedSeconds: elapsed !== null && elapsed >= 0 ? elapsed : null,
+      attention: {
+        attendedTalker: s.attended === 0 || s.attended === 1 ? s.attended : null,
+        correlationA: number(s.corr_a), correlationB: number(s.corr_b),
+        gainA: number(s.gain_a_db), gainB: number(s.gain_b_db)
+      },
+      session: {
+        accuracy: accuracy !== null && accuracy >= 0 && accuracy <= 1 ? accuracy : null,
+        eegSource: text(s.eeg_source), audioSource: text(s.audio_source), mode: text(s.mode)
+      },
+      eeg: validEEG ? traces.map(channel => channel.slice()) : []
+    };
+  }
   function gainPct(db){ return Math.max(2, Math.min(100,(db+12)/12*100)); }
   function paintCard(L, db, on){
-    $("fill"+L).style.height = gainPct(db)+"%";
-    $("db"+L).textContent = (db>=0?"+":"")+db.toFixed(0)+" dB";
+    $("fill"+L).style.height = (db === null ? 2 : gainPct(db))+"%";
+    $("db"+L).textContent = db === null ? "— dB" : (db>=0?"+":"")+db.toFixed(0)+" dB";
     $("card"+L).classList.toggle("on", on);
     const st = $("status"+L); st.classList.toggle("on", on);
     st.lastElementChild.textContent = on ? "Amplified" : "Background";
@@ -289,11 +315,11 @@
       : 'Lapse risk and signal quality are not connected.';
   }
   function updateHistory(state = null){
-    const second = Math.floor(demoMode ? state.t : performance.now()/1000);
+    const second = Math.floor(demoMode ? state.elapsedSeconds : performance.now()/1000);
     if(second === historySecond) return;
     historySecond = second;
     const points = demoMode ? demoHistory(second) : recordAttention(second,
-      state && state.running && !state.done ? state.attended : null);
+      state && state.running && !state.done ? state.attention.attendedTalker : null);
     historyBars('attentionHistory',points,second,'attended');
     $('attentionHistoryStatus').textContent = points.length ? (demoMode ? 'Simulated A/B attention' : 'Observed A/B attention') : 'Awaiting attention observations';
     if(demoMode){
@@ -413,27 +439,28 @@
   async function tick(){
     const generation = modeGeneration;
     try{
-      const s = demoMode ? demoState((performance.now()-demoStarted)/1000)
+      const raw = demoMode ? demoState((performance.now()-demoStarted)/1000)
         : await (await fetch("/state",{cache:"no-store"})).json();
       if(generation !== modeGeneration) return;
-      updateHistory(s);
-      paintVigilance(demoMode ? s.t : null);
-      paintSignal(demoMode ? s.t : null);
-      if(Array.isArray(s.eeg) && s.eeg.length) eeg = s.eeg;
+      const state = normalizeState(raw);
+      updateHistory(state);
+      paintVigilance(demoMode ? state.elapsedSeconds : null);
+      paintSignal(demoMode ? state.elapsedSeconds : null);
+      eeg = state.eeg;
       $("eegEmpty").hidden = eeg.length > 0;
-      $("eegStatus").textContent = eeg.length ? (s.done ? "Final samples" : "EEG samples") : "Awaiting samples";
-      $("eegSource").textContent = s.eeg_source || "—";
-      $("audioSource").textContent = s.audio_source || "—";
-      $("sessionMode").textContent = s.mode || "—";
-      $("elapsed").textContent = (s.t||0).toFixed(1)+" s";
+      $("eegStatus").textContent = eeg.length ? (state.done ? "Final samples" : "EEG samples") : "Awaiting samples";
+      $("eegSource").textContent = state.session.eegSource || "—";
+      $("audioSource").textContent = state.session.audioSource || "—";
+      $("sessionMode").textContent = state.session.mode || "—";
+      $("elapsed").textContent = state.elapsedSeconds === null ? "—" : state.elapsedSeconds.toFixed(1)+" s";
       // Zero also means unavailable in the current backend; don't claim 0% accuracy.
-      $("accuracy").textContent = s.correct_frac ? Math.round(100*s.correct_frac)+"%" : "—";
-      $("footer").textContent = "ATTUNE · EEG-guided adaptive hearing · " + (s.done ? "Session complete" : "Session connected");
-      if(s.done){
+      $("accuracy").textContent = state.session.accuracy ? Math.round(100*state.session.accuracy)+"%" : "—";
+      $("footer").textContent = "ATTUNE · EEG-guided adaptive hearing · " + (state.done ? "Session complete" : "Session connected");
+      if(state.done){
         systemStatus("done", "Session complete");
         $("banner").textContent = "Session complete";
         $("attentionDetail").textContent = "Final attention and gain values are shown below.";
-      }else if(!s.running){
+      }else if(!state.running){
         systemStatus("waiting", "Warming up");
         $("banner").textContent = "Waiting for the listener…";
         $("attentionDetail").textContent = "The decoder is warming up. First launch can take a few seconds.";
@@ -441,21 +468,22 @@
         return;
       }else{
         systemStatus("running", "System running");
-        const who = s.attended===0 ? "Talker A" : "Talker B";
-        $("banner").textContent = "Attending to "+who;
-        $("attentionDetail").textContent = "The attended voice is brought forward in the mix.";
+        const who = state.attention.attendedTalker===0 ? "Talker A" : "Talker B";
+        $("banner").textContent = state.attention.attendedTalker === null ? "Attention unavailable" : "Attending to "+who;
+        $("attentionDetail").textContent = state.attention.attendedTalker === null ? "Waiting for a valid attention decision." : "The attended voice is brought forward in the mix.";
       }
-      paintCard("A", s.gain_a_db, s.attended===0);
-      paintCard("B", s.gain_b_db, s.attended===1);
-      $("corrA").textContent = (s.corr_a||0).toFixed(3);
-      $("corrB").textContent = (s.corr_b||0).toFixed(3);
+      paintCard("A", state.attention.gainA, state.attention.attendedTalker===0);
+      paintCard("B", state.attention.gainB, state.attention.attendedTalker===1);
+      $("corrA").textContent = state.attention.correlationA === null ? "—" : state.attention.correlationA.toFixed(3);
+      $("corrB").textContent = state.attention.correlationB === null ? "—" : state.attention.correlationB.toFixed(3);
       // attention needle from the correlation gap, squashed to 0..100%
-      const gap = (s.corr_a||0) - (s.corr_b||0);
-      const pos = 50 - Math.tanh(gap*8)*46;
+      const gap = (state.attention.correlationA||0) - (state.attention.correlationB||0);
+      const pos = state.attention.correlationA === null || state.attention.correlationB === null
+        ? 50 : 50 - Math.tanh(gap*8)*46;
       $("needle").style.left = pos+"%";
       if(demoMode){
         systemStatus("demo", "Demo mode");
-        $("banner").textContent = "Simulated attention: Talker "+(s.attended===0 ? "A" : "B");
+        $("banner").textContent = "Simulated attention: Talker "+(state.attention.attendedTalker===0 ? "A" : "B");
         $("attentionDetail").textContent = "Illustrative attention cycle · no listener measurements or audio playback.";
         $("eegStatus").textContent = "Simulated traces";
         $("footer").textContent = "ATTUNE · EEG-guided adaptive hearing · DEMO MODE · SIMULATED DATA";

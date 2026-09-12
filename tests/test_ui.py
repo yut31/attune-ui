@@ -419,7 +419,7 @@ console.log(JSON.stringify([0,.399999,.4,.699999,.7,1].map(x=>run(`vigilanceLabe
     def test_ui_003_t08_contract_unchanged(self):
         self.assertEqual(set(load_live_demo().STATE), set(STATE_FIELDS))
         self.assertNotIn('lapse_score', self.script)
-        self.assertIn('paintVigilance(demoMode ? s.t : null)', self.script)
+        self.assertIn('paintVigilance(demoMode ? state.elapsedSeconds : null)', self.script)
         self.assertEqual(set(re.findall(r'\bs\s*\.\s*(\w+)', self.script)), set(STATE_FIELDS))
         helper = self.script.split('function demoLapseRisk(t){', 1)[1].split('function vigilanceLabel', 1)[0]
         for field in ('eeg', 'corr_a', 'corr_b', 'correct_frac', 'attended', 'gain'):
@@ -510,7 +510,7 @@ console.log(JSON.stringify(times.map(t=>{
     def test_ui_004_t10_backend_contract_unchanged(self):
         self.assertEqual(set(load_live_demo().STATE), set(STATE_FIELDS))
         self.assertEqual(set(re.findall(r'\bs\s*\.\s*(\w+)', self.script)), set(STATE_FIELDS))
-        self.assertIn('paintSignal(demoMode ? s.t : null)', self.script)
+        self.assertIn('paintSignal(demoMode ? state.elapsedSeconds : null)', self.script)
         helper = self.script.split('function demoSignal(t){', 1)[1].split('function qualityLabel', 1)[0]
         for field in ('eeg', 'corr_a', 'corr_b', 'attended', 'gain', 'correct_frac', 'lapse'):
             self.assertNotIn(field, helper)
@@ -658,6 +658,121 @@ console.log(JSON.stringify([demo,cleared,stale,real,elements.lapseHistory.innerH
             if tag == 'link':
                 self.assertNotIn('href', attrs)
         self.assertNotRegex(self.script, r'\bimport\s*(?:\(|.*from)')
+
+
+
+class UIAdapterTests(unittest.TestCase):
+    setUp = UIVigilanceTests.setUp
+    run_js = UIVigilanceTests.run_js
+
+    def test_ui_006_t01_adapter_exists(self):
+        self.assertIn('function normalizeState(rawState)', self.script)
+
+    def test_ui_006_t02_valid_mapping(self):
+        value = self.run_js(r"""
+console.log(JSON.stringify(run(`normalizeState({running:true,done:false,t:12.5,attended:1,
+ gain_a_db:-9,gain_b_db:0,corr_a:.2,corr_b:.8,correct_frac:.75,
+ eeg_source:'recorded',audio_source:'tracks',mode:'playing',eeg:[[0,1],[-1,0]]})`)));
+""")
+        self.assertEqual(value, dict(running=True,done=False,elapsedSeconds=12.5,
+            attention=dict(attendedTalker=1,correlationA=.2,correlationB=.8,gainA=-9,gainB=0),
+            session=dict(accuracy=.75,eegSource='recorded',audioSource='tracks',mode='playing'),
+            eeg=[[0,1],[-1,0]]))
+
+    def test_ui_006_t03_invalid_defaults(self):
+        values = self.run_js(r"""
+console.log(JSON.stringify([null,undefined,0,'bad',true,[],{}].map(x=>context.normalizeState(x))));
+""")
+        expected = dict(running=False,done=False,elapsedSeconds=None,
+            attention=dict(attendedTalker=None,correlationA=None,correlationB=None,gainA=None,gainB=None),
+            session=dict(accuracy=None,eegSource='',audioSource='',mode=''),eeg=[])
+        self.assertTrue(all(value == expected for value in values))
+
+    def test_ui_006_t04_attended_validation(self):
+        values = self.run_js(r"""
+console.log(JSON.stringify([0,1,-1,2,'0',true,null,NaN].map(attended=>context.normalizeState({attended}).attention.attendedTalker)));
+""")
+        self.assertEqual(values,[0,1,None,None,None,None,None,None])
+
+    def test_ui_006_t05_eeg_validation(self):
+        values = self.run_js(r"""
+console.log(JSON.stringify([null,{},'bad',[1,2],[[0]],[[0,1],[2]],[[0,NaN]],[[0,1]]].map(eeg=>context.normalizeState({eeg}).eeg)));
+""")
+        self.assertEqual(values[:-1],[[]]*7)
+        self.assertEqual(values[-1],[[0,1]])
+
+    def test_ui_006_t06_finite_numbers_and_strings(self):
+        values = self.run_js(r"""
+console.log(JSON.stringify([NaN,Infinity,-Infinity,'1',null,true].map(x=>context.normalizeState({
+ t:x,corr_a:x,corr_b:x,gain_a_db:x,gain_b_db:x,correct_frac:x,eeg_source:x,audio_source:{},mode:[],running:1,done:'true'}))));
+""")
+        for value in values:
+            self.assertIsNone(value['elapsedSeconds'])
+            self.assertTrue(all(v is None for v in value['attention'].values()))
+            self.assertIsNone(value['session']['accuracy'])
+            self.assertEqual(value['session']['audioSource'],'')
+            self.assertEqual(value['session']['mode'],'')
+            self.assertFalse(value['running'])
+            self.assertFalse(value['done'])
+
+    def test_ui_006_t07_real_path_normalized(self):
+        values = self.run_js(r"""
+let calls=0;const original=context.normalizeState;
+context.normalizeState=x=>{calls++;return original(x)};
+requests[0].resolve({json:async()=>({running:true,attended:'bad',corr_a:'bad',gain_a_db:Infinity,eeg:'bad'})});
+await flush();
+console.log(JSON.stringify([calls,elements.banner.textContent,elements.dbA.textContent,elements.corrA.textContent,elements.elapsed.textContent]));
+""")
+        self.assertEqual(values,[1,'Attention unavailable','— dB','—','—'])
+
+    def test_ui_006_t08_normalized_attention_rendering(self):
+        rendering = self.script.split('async function tick()',1)[1]
+        for field in ('attendedTalker','gainA','gainB','correlationA','correlationB'):
+            self.assertIn('state.attention.'+field,rendering)
+        for field in ('corr_a','corr_b','gain_a_db','gain_b_db'):
+            self.assertNotIn(field,rendering)
+
+    def test_ui_006_t09_normalized_session_rendering(self):
+        rendering = self.script.split('async function tick()',1)[1]
+        for field in ('accuracy','eegSource','audioSource','mode'):
+            self.assertIn('state.session.'+field,rendering)
+
+    def test_ui_006_t10_normalized_history(self):
+        values = self.run_js(r"""
+run('updateHistory(normalizeState({running:true,attended:1}))');
+clock=1000;run('updateHistory(normalizeState({running:true,attended:8}))');
+console.log(JSON.stringify(run('realHistory')));
+""")
+        self.assertEqual(values,[{'time':0,'attended':1}])
+        self.assertIn('state.attention.attendedTalker',self.script.split('function updateHistory',1)[1].split('function demoSignal',1)[0])
+
+    def test_ui_006_t11_no_fabricated_metrics(self):
+        value = self.run_js(r"""
+console.log(JSON.stringify(context.normalizeState({lapseScore:.8,signalQuality:.9,artifact:true,confidence:.8})));
+""")
+        self.assertEqual(set(value),{'running','done','elapsedSeconds','attention','session','eeg'})
+        for field in ('lapseScore','signalQuality','artifact','confidence'):
+            self.assertNotIn(field,json.dumps(value))
+
+    def test_ui_006_t12_backend_unchanged(self):
+        self.assertEqual(set(load_live_demo().STATE),set(STATE_FIELDS))
+
+    def test_ui_006_t13_demo_determinism(self):
+        values = self.run_js(r"""
+console.log(JSON.stringify([0,8,16,40].map(t=>[run(`normalizeState(demoState(${t}))`),run(`normalizeState(demoState(${t}))`)])));
+""")
+        for first,second in values:
+            self.assertEqual(first,second)
+            self.assertTrue(first['running'])
+
+    def test_ui_006_t14_no_randomness(self):
+        self.assertNotRegex(self.script, r'Math\s*(?:\.\s*random|\[\s*[\'\"]random)')
+
+    def test_ui_006_t15_features_preserved(self):
+        for heading in ('ATTUNE','Talker A','Talker B','Vigilance','Signal quality','Session History'):
+            self.assertIn(heading,self.ui.headings)
+        for element_id in ('eeg','demoToggle','demoDisclosure','lapseRisk','qualityValue'):
+            self.assertIn(element_id,self.ui.ids)
 
 
 if __name__ == '__main__':

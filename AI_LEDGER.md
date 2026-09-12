@@ -521,3 +521,71 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
   commits or pushes.
 
 ---
+
+
+### UI-006 — ATTUNE Stable Frontend State Adapter
+
+**Contributor:** Development workflow
+**Status:** DONE
+**Date:** 2026-09-11
+
+**Exact files changed**
+- neuro-attention/src/ui.html
+- tests/test_ui.py
+- tests/TEST_REGISTRY.md
+- AI_LEDGER.md
+
+**Normalized frontend contract**
+- running, done, elapsedSeconds, eeg
+- attention: attendedTalker, correlationA, correlationB, gainA, gainB
+- session: accuracy, eegSource, audioSource, mode
+
+**Defaults / behavior**
+- normalizeState(rawState) accepts malformed optional JSON input safely.
+- Only literal true sets booleans. Invalid/nonfinite numeric values become null;
+  attended accepts only numeric 0/1. Elapsed must be nonnegative; accuracy in 0..1.
+- Missing/nonstring labels become empty strings. EEG must be rectangular finite
+  numeric arrays with at least two samples/channel; otherwise []. Valid data copied.
+- Invalid display values show dashes; unknown talker shows Attention unavailable.
+  Invalid EEG clears stale traces. Valid-input layout and normal behavior retained.
+- Real /state and existing backend-shaped demoState both pass through the adapter
+  before rendering. Rendered attention/session and real history use normalized
+  properties. No lapse/signal/artifact/confidence fields added to adapter/backend.
+- Deterministic vigilance/signal helpers remain separate and demo-only. Bounded
+  30-sample demo history and real missing-metric placeholders retained.
+
+**Tests added / updated**
+- UI-006-T01–T15: adapter existence, mapping, defaults, attended, EEG, finite
+  values, real path, attention/session rendering, history, no future metrics,
+  unchanged backend, demo determinism, no randomness and existing features.
+- Existing UI-003-T08/UI-004-T10 source assertions updated to normalized elapsed
+  property; same demo-only condition retained. No tests removed or weakened.
+
+**Exact commands / results**
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.test_ui -v
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
+```
+- UI: PASS, 71 tests, no skips.
+- Discovery: 71 passed, 2 known missing-numpy import errors in test_combined and
+  test_driving_pilot. No dependency installation or changes to those tests.
+
+**Assumptions**
+- Input is ordinary frontend JSON-like data; scientific values are not coerced
+  from strings. Null means unavailable, not measured zero.
+- Existing zero-accuracy display convention remains unchanged.
+
+**Limitations**
+- No browser visual review performed; runtime verification uses existing Node VM
+  with mocked browser/network. Optional runtime tests skip if Node is absent.
+- Full existing-suite verification still needs its dependency-equipped environment.
+
+**Recommended next task**
+- Human review of adapter contract before separately authorized integration.
+  UI-007 not started.
+
+**Human review needed**
+- No implementation blocker. Backend/model/preprocessing unchanged; no installs,
+  external services, commits or pushes.
+
+---

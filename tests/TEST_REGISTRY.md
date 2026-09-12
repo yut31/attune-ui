@@ -75,8 +75,21 @@ Every test added by any human or AI must be registered here.
 | UI-005-T12 | Session History | unit | tests/test_ui.py | test_ui_005_t12_preserved_features | existing ATTUNE dashboard and demo preserved | PASS |
 | UI-005-T13 | Session History | unit | tests/test_ui.py | test_ui_005_t13_exit_clears_and_real_recovers | simulated rows cleared immediately; stale responses ignored; real attention resumes | PASS |
 | UI-005-T14 | Session History | unit | tests/test_ui.py | test_ui_005_t14_no_external_dependencies | no external script/link/import dependency | PASS |
-| UI-006-T01 | history | unit | TBD | append values | values remain ordered | PLANNED |
-| UI-006-T02 | history | unit | TBD | maximum history size | oldest values removed | PLANNED |
+| UI-006-T01 | Frontend adapter | unit | tests/test_ui.py | test_ui_006_t01_adapter_exists | normalizeState exists | PASS |
+| UI-006-T02 | Frontend adapter | unit | tests/test_ui.py | test_ui_006_t02_valid_mapping | all current fields map into grouped frontend structure | PASS |
+| UI-006-T03 | Frontend adapter | unit | tests/test_ui.py | test_ui_006_t03_invalid_defaults | null/non-object input yields safe unavailable defaults | PASS |
+| UI-006-T04 | Frontend adapter | unit | tests/test_ui.py | test_ui_006_t04_attended_validation | only numeric 0/1 accepted | PASS |
+| UI-006-T05 | Frontend adapter | unit | tests/test_ui.py | test_ui_006_t05_eeg_validation | invalid EEG rejected; valid rectangular finite traces retained | PASS |
+| UI-006-T06 | Frontend adapter | unit | tests/test_ui.py | test_ui_006_t06_finite_numbers_and_strings | nonfinite/mistyped values safely default | PASS |
+| UI-006-T07 | Frontend adapter | unit | tests/test_ui.py | test_ui_006_t07_real_path_normalized | real fetch passes through adapter and malformed data renders unavailable | PASS |
+| UI-006-T08 | Frontend adapter | unit | tests/test_ui.py | test_ui_006_t08_normalized_attention_rendering | rendering uses grouped attention | PASS |
+| UI-006-T09 | Frontend adapter | unit | tests/test_ui.py | test_ui_006_t09_normalized_session_rendering | rendering uses grouped session | PASS |
+| UI-006-T10 | Frontend adapter | unit | tests/test_ui.py | test_ui_006_t10_normalized_history | history uses valid normalized talker; invalid talker not recorded | PASS |
+| UI-006-T11 | Frontend adapter | unit | tests/test_ui.py | test_ui_006_t11_no_fabricated_metrics | no future metrics in normalized output | PASS |
+| UI-006-T12 | Frontend adapter | unit | tests/test_ui.py | test_ui_006_t12_backend_unchanged | 13 backend keys unchanged | PASS |
+| UI-006-T13 | Frontend adapter | unit | tests/test_ui.py | test_ui_006_t13_demo_determinism | demo remains deterministic through adapter | PASS |
+| UI-006-T14 | Frontend adapter | unit | tests/test_ui.py | test_ui_006_t14_no_randomness | no Math.random | PASS |
+| UI-006-T15 | Frontend adapter | unit | tests/test_ui.py | test_ui_006_t15_features_preserved | existing dashboard remains | PASS |
 | UI-007-T01 | transport | integration | TBD | valid WebSocket message | UI receives payload | PLANNED |
 | UI-007-T02 | transport | integration | TBD | malformed WebSocket message | app remains stable | PLANNED |
 | UI-007-T03 | transport | integration | TBD | disconnect | disconnected state shown | PLANNED |
@@ -343,3 +356,34 @@ Missing observations remain gaps. No real lapse/quality/artifact values generate
 
 **Registry note:** UI-005-T01/T02 generic planned signal/artifact placeholders now
 follow the user's explicit history-task mapping. Historical entries retained.
+
+
+### 2026-09-11 — UI-006
+
+**Contributor:** Development workflow
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.test_ui -v
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
+```
+
+**Results:** UI PASS: 71 tests, no skips (56 existing + 15 new).
+Discovery: 73 entries, 71 passed, 2 existing import errors: missing numpy in
+ test_combined/test_driving_pilot. No packages installed or those tests altered.
+
+**Coverage:** UI-006-T01–T15 cover mapping, malformed/null/non-object inputs,
+strict attended values, invalid/ragged/nonfinite EEG, nonfinite numbers, real
+adapter execution, normalized rendering/history, absence of future metrics,
+backend compatibility, demo determinism, no randomness and existing features.
+Runtime checks use the existing installed Node VM harness with fake browser and
+network. All ran here; runtime tests skip on machines without Node.
+
+**Existing assertions updated:** UI-003-T08 and UI-004-T10 now assert demo-only
+helper calls use `state.elapsedSeconds` instead of raw `s.t`. All test methods
+and behavioral assertions retained; raw field coverage now exercises the adapter.
+
+**Defaults:** strict booleans; invalid numbers/talker/elapsed/accuracy => null;
+invalid strings => empty string; invalid EEG => empty array. Elapsed must be
+nonnegative and accuracy within 0..1. Valid EEG is copied, finite, rectangular,
+with at least two samples/channel. No numerical coercion or invented metrics.
+UI-006-T01/T02 replace generic planned history placeholders per this task's mapping.
