@@ -16,6 +16,8 @@ from unittest.mock import Mock, patch
 
 ROOT = Path(__file__).resolve().parents[1]
 UI = ROOT / 'neuro-attention/src/ui.html'
+HANDOFF = ROOT / 'ATTUNE_UI'
+HANDOFF_UI = HANDOFF / 'ui.html'
 STATE_FIELDS = (
     'eeg', 'running', 'done', 'attended', 'gain_a_db', 'gain_b_db',
     'corr_a', 'corr_b', 'correct_frac', 'eeg_source', 'audio_source', 'mode', 't',
@@ -1127,6 +1129,123 @@ context.normalizeState({lapse_score:'0.5'}).vigilance.lapseScore]));
             self.assertIn(heading, self.ui.headings)
         for element_id in ('eeg','demoToggle','demoDisclosure','lapseRisk','qualityValue'):
             self.assertIn(element_id, self.ui.ids)
+
+
+class UIFinalPolishTests(unittest.TestCase):
+    setUp = UIVigilanceTests.setUp
+
+    def test_ui_009_t01_attune_title(self):
+        self.assertIn('<title>ATTUNE — Neuro-Adaptive Hearing</title>', self.html)
+
+    def test_ui_009_t02_subtitle(self):
+        self.assertIn('<p class="subtitle">Neuro-Adaptive Hearing</p>', self.html)
+
+    def test_ui_009_t03_footer_branding(self):
+        self.assertIn('ATTUNE · EEG-guided adaptive hearing', self.html)
+        self.assertNotIn('NOVA', self.html)
+
+    def test_ui_009_t04_demo_disclosure(self):
+        self.assertIn('DEMO MODE · SIMULATED DATA', self.html)
+        self.assertIn('not participant measurements', self.html)
+
+    def test_ui_009_t05_real_vigilance_unavailable(self):
+        self.assertIn('Combined vigilance output not connected yet.', self.html)
+        self.assertIn('<p id="lapseRisk">—</p>', self.html)
+
+    def test_ui_009_t06_real_signal_unavailable(self):
+        self.assertIn('Signal-quality processing not connected yet.', self.html)
+        self.assertIn('<p id="artifactStatus">Not connected</p>', self.html)
+
+    def test_ui_009_t07_no_medical_claim(self):
+        for term in ('diagnos', 'medical certainty', 'clinical certainty'):
+            self.assertNotIn(term, self.html.lower())
+
+    def test_ui_009_t08_accessible_demo_control(self):
+        self.assertRegex(self.html, r'<button[^>]+id="demoToggle"[^>]*>Start Demo</button>')
+        self.assertIn('aria-pressed="false"', self.html)
+        self.assertIn('aria-controls="demoDisclosure"', self.html)
+
+    def test_ui_009_t09_focus_visible_style(self):
+        self.assertIn('#demoToggle:focus-visible', self.html)
+
+    def test_ui_009_t10_status_semantics(self):
+        self.assertIn('id="systemStatus" role="status"', self.html)
+        self.assertIn('aria-live="polite"', self.html)
+        self.assertIn('id="banner" role="status"', self.html)
+
+    def test_ui_009_t11_narrow_responsive_rule(self):
+        self.assertRegex(self.html, r'@media\s*\(max-width:\s*760px\)')
+
+    def test_ui_009_t12_history_narrow_layout(self):
+        self.assertRegex(self.html, r'@media\s*\(max-width:\s*540px\).*history-row')
+
+    def test_ui_009_t13_responsive_eeg(self):
+        self.assertIn('#eeg{width:100%;height:170px;display:block}', self.html)
+        self.assertIn('overflow-x:hidden', self.html)
+
+    def test_ui_009_t14_no_external_resources(self):
+        for tag, attrs in self.ui.elements:
+            if tag == 'script':
+                self.assertNotIn('src', attrs)
+            if tag == 'link':
+                self.assertNotIn('href', attrs)
+
+    def test_ui_009_t15_no_framework_artifacts(self):
+        self.assertNotRegex(self.html, r'(?i)react|vite|npm|node_modules')
+
+    def test_ui_009_t16_no_randomness(self):
+        self.assertNotRegex(self.script, r'Math\s*(?:\.\s*random|\[\s*[\'\"]random)')
+
+    def test_ui_009_t17_no_local_storage(self):
+        self.assertNotIn('localStorage', self.script)
+
+    def test_ui_009_t18_same_origin_state_endpoint(self):
+        self.assertIn('fetch("/state"', self.script)
+        self.assertNotRegex(self.script, r'fetch\s*\(\s*[\'\"]https?://')
+
+    def test_ui_009_t19_no_store_polling(self):
+        self.assertIn('fetch("/state",{cache:"no-store"})', self.script)
+
+    def test_ui_009_t20_stale_protection_preserved(self):
+        self.assertIn('if(generation !== modeGeneration) return;', self.script)
+        self.assertIn('realRequestSequence', self.script)
+
+    def test_ui_009_t21_mode_isolation_preserved(self):
+        self.assertIn('resetHistory()', self.script)
+        self.assertIn('if(demoMode) return;', self.script)
+        self.assertIn('DEMO MODE · SIMULATED DATA', self.html)
+
+    def test_ui_009_t22_handoff_files_are_approved(self):
+        self.assertTrue(HANDOFF.is_dir())
+        self.assertEqual({path.name for path in HANDOFF.iterdir()},
+                         {'ui.html', 'README_UI.md', 'INTEGRATION.md'})
+
+    def test_ui_009_t23_handoff_ui_matches_production(self):
+        self.assertTrue(HANDOFF_UI.is_file())
+        self.assertEqual(UI.read_bytes(), HANDOFF_UI.read_bytes())
+
+    def test_ui_009_t24_readme_has_no_absolute_path(self):
+        self.assertNotRegex((HANDOFF / 'README_UI.md').read_text(encoding='utf-8'), r'/Users/|/home/')
+
+    def test_ui_009_t25_integration_documents_lapse_score(self):
+        contract = (HANDOFF / 'INTEGRATION.md').read_text(encoding='utf-8')
+        self.assertIn('lapse_score', contract)
+        self.assertIn('0..1', contract)
+
+    def test_ui_009_t26_integration_documents_unavailable_quality(self):
+        contract = (HANDOFF / 'INTEGRATION.md').read_text(encoding='utf-8')
+        self.assertIn('do not currently exist', contract)
+        self.assertIn('unavailable in Real Mode', contract)
+
+    def test_ui_009_t27_handoff_has_no_secret_files(self):
+        forbidden = re.compile(r'(?i)(^|\.)(env|key|pem|p12|pfx|credential|token|dataset|participant|recording|checkpoint|model)($|\.)')
+        self.assertFalse(any(forbidden.search(path.name) for path in HANDOFF.rglob('*')))
+
+    def test_ui_009_t28_previous_features_remain(self):
+        for heading in ('ATTUNE','Talker A','Talker B','Vigilance','Signal quality','Session History'):
+            self.assertIn(heading, self.ui.headings)
+        for feature in ('normalizeState', 'demoLapseRisk', 'realRequestSequence', 'resetHistory'):
+            self.assertIn(feature, self.script)
 
 
 if __name__ == '__main__':

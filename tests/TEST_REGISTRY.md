@@ -138,13 +138,41 @@ Every test added by any human or AI must be registered here.
 | UI-008-T27 | Integration hardening | unit | tests/test_ui.py | test_ui_008_t27_backend_contract_unchanged | live_demo.STATE remains unchanged | PASS |
 | UI-008-T28 | Integration hardening | unit | tests/test_ui.py | test_ui_008_t28_lapse_score_readiness_preserved | UI-007 optional lapse-score behavior remains | PASS |
 | UI-008-T29 | Integration hardening | unit | tests/test_ui.py | test_ui_008_t29_previous_features_remain | UI-001 through UI-007 features remain | PASS |
-| UI-009-T01 | transport | integration | TBD | valid WebSocket message | UI receives payload | PLANNED |
-| UI-009-T02 | transport | integration | TBD | malformed WebSocket message | app remains stable | PLANNED |
-| UI-009-T03 | transport | integration | TBD | disconnect | disconnected state shown | PLANNED |
-| UI-010-T01 | mock integration | integration | TBD | backend to UI | prediction visible | PLANNED |
-| UI-011-T01 | real adapter | integration | TBD | real output mapping | conforms to UI contract | PLANNED |
-| UI-012-T01 | demo | smoke | manual | full startup | system starts successfully | PLANNED |
-| UI-012-T02 | demo fallback | smoke | manual | EEG unavailable | demo mode usable | PLANNED |
+| UI-009-T01 | Final polish | unit | tests/test_ui.py | test_ui_009_t01_attune_title | ATTUNE user-facing title remains present | PASS |
+| UI-009-T02 | Final polish | unit | tests/test_ui.py | test_ui_009_t02_subtitle | Neuro-Adaptive Hearing subtitle remains present | PASS |
+| UI-009-T03 | Final polish | unit | tests/test_ui.py | test_ui_009_t03_footer_branding | footer branding remains correct | PASS |
+| UI-009-T04 | Final polish | unit | tests/test_ui.py | test_ui_009_t04_demo_disclosure | Demo Mode has explicit simulated disclosure | PASS |
+| UI-009-T05 | Final polish | unit | tests/test_ui.py | test_ui_009_t05_real_vigilance_unavailable | real unavailable vigilance is clear | PASS |
+| UI-009-T06 | Final polish | unit | tests/test_ui.py | test_ui_009_t06_real_signal_unavailable | real signal quality remains unavailable | PASS |
+| UI-009-T07 | Final polish | unit | tests/test_ui.py | test_ui_009_t07_no_medical_claim | no medical or diagnostic claim is introduced | PASS |
+| UI-009-T08 | Final polish | unit | tests/test_ui.py | test_ui_009_t08_accessible_demo_control | Demo control has accessible label/state attributes | PASS |
+| UI-009-T09 | Final polish | unit | tests/test_ui.py | test_ui_009_t09_focus_visible_style | interactive control has focus-visible styling | PASS |
+| UI-009-T10 | Final polish | unit | tests/test_ui.py | test_ui_009_t10_status_semantics | status areas remain semantically labeled | PASS |
+| UI-009-T11 | Final polish | unit | tests/test_ui.py | test_ui_009_t11_narrow_responsive_rule | narrow responsive CSS rule exists | PASS |
+| UI-009-T12 | Final polish | unit | tests/test_ui.py | test_ui_009_t12_history_narrow_layout | history has narrow-screen handling | PASS |
+| UI-009-T13 | Final polish | unit | tests/test_ui.py | test_ui_009_t13_responsive_eeg | EEG visualization is constrained and responsive | PASS |
+| UI-009-T14 | Final polish | unit | tests/test_ui.py | test_ui_009_t14_no_external_resources | no external CSS/JS resources exist | PASS |
+| UI-009-T15 | Final polish | unit | tests/test_ui.py | test_ui_009_t15_no_framework_artifacts | no React/Vite/npm artifacts exist | PASS |
+| UI-009-T16 | Final polish | unit | tests/test_ui.py | test_ui_009_t16_no_randomness | no Math.random is used | PASS |
+| UI-009-T17 | Final polish | unit | tests/test_ui.py | test_ui_009_t17_no_local_storage | no localStorage is used | PASS |
+| UI-009-T18 | Final polish | unit | tests/test_ui.py | test_ui_009_t18_same_origin_state_endpoint | /state remains same-origin | PASS |
+| UI-009-T19 | Final polish | unit | tests/test_ui.py | test_ui_009_t19_no_store_polling | cache no-store polling remains | PASS |
+| UI-009-T20 | Final polish | unit | tests/test_ui.py | test_ui_009_t20_stale_protection_preserved | UI-008 stale protection remains | PASS |
+| UI-009-T21 | Final polish | unit | tests/test_ui.py | test_ui_009_t21_mode_isolation_preserved | UI-008 Real/Demo isolation remains | PASS |
+| UI-009-T22 | Handoff | unit | tests/test_ui.py | test_ui_009_t22_handoff_files_are_approved | ATTUNE_UI contains only approved files | PASS |
+| UI-009-T23 | Handoff | unit | tests/test_ui.py | test_ui_009_t23_handoff_ui_matches_production | handoff ui.html matches production byte-for-byte | PASS |
+| UI-009-T24 | Handoff | unit | tests/test_ui.py | test_ui_009_t24_readme_has_no_absolute_path | README has no machine-specific absolute path | PASS |
+| UI-009-T25 | Handoff | unit | tests/test_ui.py | test_ui_009_t25_integration_documents_lapse_score | handoff contract documents optional lapse_score | PASS |
+| UI-009-T26 | Handoff | unit | tests/test_ui.py | test_ui_009_t26_integration_documents_unavailable_quality | handoff contract documents unavailable quality/artifact | PASS |
+| UI-009-T27 | Handoff | unit | tests/test_ui.py | test_ui_009_t27_handoff_has_no_secret_files | handoff has no suspicious secret/config files | PASS |
+| UI-009-T28 | Final polish | unit | tests/test_ui.py | test_ui_009_t28_previous_features_remain | UI-001 through UI-008 behavior remains | PASS |
+| UI-010-T01 | transport | integration | TBD | valid WebSocket message | UI receives payload | PLANNED |
+| UI-010-T02 | transport | integration | TBD | malformed WebSocket message | app remains stable | PLANNED |
+| UI-010-T03 | transport | integration | TBD | disconnect | disconnected state shown | PLANNED |
+| UI-011-T01 | mock integration | integration | TBD | backend to UI | prediction visible | PLANNED |
+| UI-012-T01 | real adapter | integration | TBD | real output mapping | conforms to UI contract | PLANNED |
+| UI-013-T01 | demo | smoke | manual | full startup | system starts successfully | PLANNED |
+| UI-013-T02 | demo fallback | smoke | manual | EEG unavailable | demo mode usable | PLANNED |
 
 ## Adding a test
 

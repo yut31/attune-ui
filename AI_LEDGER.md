@@ -678,3 +678,52 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 
 **Human review needed**
 - Review final UI behavior with a dependency-equipped runtime and actual browser rendering before backend integration.
+
+### UI-009 — ATTUNE Final Polish + Teammate Handoff Preparation
+
+**Contributor:** Development workflow
+**Status:** DONE
+**Date:** 2026-09-11
+**Goal:** Polish the ATTUNE UI, verify responsive/accessibility and scientific-safe wording, and prepare a small UI-only handoff directory.
+
+**Files changed**
+- neuro-attention/src/ui.html
+- tests/test_ui.py
+- tests/TEST_REGISTRY.md
+- AI_LEDGER.md
+- ATTUNE_UI/ui.html
+- ATTUNE_UI/README_UI.md
+- ATTUNE_UI/INTEGRATION.md
+
+**Implementation**
+- Added focused narrow-screen polish: no horizontal page overflow, safer status wrapping, usable mobile control sizing, and clearer connected/unavailable status styling.
+- Added polite, atomic status semantics and preserved focus-visible keyboard styling.
+- Kept ATTUNE branding, Demo Mode disclosure, unavailable real metrics, strict UI-008 safety, and the plain HTML/CSS/JavaScript architecture.
+- Created `ATTUNE_UI/` with only `ui.html`, `README_UI.md`, and `INTEGRATION.md`.
+- Handoff `ui.html` is a byte-for-byte copy of production `neuro-attention/src/ui.html`.
+
+**Tests added**
+- UI-009-T01 through UI-009-T28 covering branding, wording, accessibility, responsive behavior, dependency boundaries, safety preservation, handoff contents, contract documentation, and privacy checks.
+
+**Tests run**
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.test_ui -v
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
+```
+
+**Result**
+- Focused UI suite: PASS, 147 tests.
+- Full discovery: 147 UI tests pass; known import errors remain only for `test_combined` and `test_driving_pilot` because system Python lacks numpy.
+- `cmp neuro-attention/src/ui.html ATTUNE_UI/ui.html`: PASS.
+- `git diff --check`: PASS.
+- No packages installed, no commit or push performed.
+
+**Known limitations**
+- No browser visual screenshot or live HTTP server test was run; verification uses the existing Node VM/static test approach.
+- CombinedPipeline hookup and real EEG artifact/signal-quality work remain separate tasks.
+
+**Next recommended task**
+- Real CombinedPipeline hookup / EEG artifact work, after teammate review of this UI handoff.
+
+**Human review needed**
+- Inspect `ATTUNE_UI/` before packaging or sharing.
