@@ -292,7 +292,7 @@
     realLapseHistory = realLapseHistory.filter(point => point.time > time-HISTORY_LIMIT);
     const existing = realLapseHistory.find(point => point.time === time);
     if(existing){
-      if(existing.lapse === null && lapseScore !== null) existing.lapse = lapseScore;
+      existing.lapse = lapseScore;
     }else{
       realLapseHistory.push({time, lapse: lapseScore});
       realLapseHistory = realLapseHistory.slice(-HISTORY_LIMIT);
@@ -430,10 +430,20 @@
       mode: "DEMO · simulated", t: t
     };
   }
-  let demoMode = false, demoStarted = 0, modeGeneration = 0;
+  let demoMode = false, demoStarted = 0, modeGeneration = 0, realRequestSequence = 0;
+  function clearRealState(label = "Waiting"){
+    paintVigilance();
+    paintSignal();
+    clearCards(label);
+    eeg = [];
+    $("eegEmpty").hidden = false;
+    $("eegStatus").textContent = label === "Unavailable" ? "Disconnected" : "Awaiting samples";
+    for(const id of ["eegSource","audioSource","sessionMode","elapsed","accuracy"]) $(id).textContent = "—";
+  }
   function toggleDemo(){
     demoMode = !demoMode;
     modeGeneration++; // Invalidate real requests from before either mode switch.
+    realRequestSequence++;
     resetHistory();
     demoStarted = performance.now();
     $("demoToggle").textContent = demoMode ? "Exit Demo" : "Start Demo";
@@ -448,10 +458,7 @@
       : "Brain activity used to decode attention · normalized channel traces";
     cv.setAttribute("aria-label", demoMode ? "Simulated EEG illustration" : "EEG brain activity traces");
     if(!demoMode){
-      paintVigilance();
-      paintSignal();
-      clearCards("Waiting");
-      for(const id of ["eegSource","audioSource","sessionMode","elapsed","accuracy"]) $(id).textContent = "—";
+      clearRealState();
       systemStatus("waiting", "Connecting");
       $("banner").textContent = "Waiting for the listener…";
       $("attentionDetail").textContent = "Waiting for real backend data.";
@@ -463,15 +470,28 @@
   $("demoToggle").addEventListener("click", toggleDemo);
   async function tick(){
     const generation = modeGeneration;
+    const requestSequence = demoMode ? null : ++realRequestSequence;
     try{
-      const raw = demoMode ? demoState((performance.now()-demoStarted)/1000)
-        : await (await fetch("/state",{cache:"no-store"})).json();
+      let raw;
+      if(demoMode){
+        raw = demoState((performance.now()-demoStarted)/1000);
+      }else{
+        const response = await fetch("/state",{cache:"no-store"});
+        if(response.ok === false) throw new Error("state request failed");
+        raw = await response.json();
+        if(raw === null || typeof raw !== "object" || Array.isArray(raw)){
+          throw new Error("state payload is not an object");
+        }
+      }
       if(generation !== modeGeneration) return;
+      if(!demoMode && requestSequence !== realRequestSequence) return;
       const state = normalizeState(raw);
+      if(!demoMode) systemStatus("connected", "Backend connected");
       updateHistory(state);
-      paintVigilance(demoMode ? demoLapseRisk(state.elapsedSeconds) : state.vigilance.lapseScore, demoMode);
+      const live = state.running || state.done;
+      paintVigilance(demoMode ? demoLapseRisk(state.elapsedSeconds) : live ? state.vigilance.lapseScore : null, demoMode);
       paintSignal(demoMode ? state.elapsedSeconds : null);
-      eeg = state.eeg;
+      eeg = demoMode || live ? state.eeg : [];
       $("eegEmpty").hidden = eeg.length > 0;
       $("eegStatus").textContent = eeg.length ? (state.done ? "Final samples" : "EEG samples") : "Awaiting samples";
       $("eegSource").textContent = state.session.eegSource || "—";
@@ -489,10 +509,10 @@
         systemStatus("waiting", "Warming up");
         $("banner").textContent = "Waiting for the listener…";
         $("attentionDetail").textContent = "The decoder is warming up. First launch can take a few seconds.";
-        clearCards("Waiting");
+        clearRealState();
         return;
       }else{
-        systemStatus("running", "System running");
+        systemStatus("connected", "System running");
         const who = state.attention.attendedTalker===0 ? "Talker A" : "Talker B";
         $("banner").textContent = state.attention.attendedTalker === null ? "Attention unavailable" : "Attending to "+who;
         $("attentionDetail").textContent = state.attention.attendedTalker === null ? "Waiting for a valid attention decision." : "The attended voice is brought forward in the mix.";
@@ -515,13 +535,14 @@
       }
     }catch(e){
       if(generation !== modeGeneration) return;
-      systemStatus("waiting", "Disconnected");
+      if(!demoMode && requestSequence !== realRequestSequence) return;
+      if(demoMode) return;
+      systemStatus("unavailable", "Disconnected");
       $("banner").textContent = "Waiting for the demo engine…";
-      $("attentionDetail").textContent = "Reconnecting automatically. Session information shows the last received values.";
-      clearCards("Unavailable");
-      $("eegStatus").textContent = "Disconnected";
-      eeg = [];
-      $("eegEmpty").hidden = false;
+      $("attentionDetail").textContent = "Backend unavailable. Reconnecting automatically.";
+      historySecond = null;
+      updateHistory(null);
+      clearRealState("Unavailable");
       $("footer").textContent = "ATTUNE · EEG-guided adaptive hearing · Connection unavailable";
     }
   }

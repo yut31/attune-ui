@@ -633,3 +633,48 @@ python3 -m unittest discover -s tests -v
 
 **Human review needed**
 - No frontend implementation blocker; review future backend field ownership before integration.
+
+### UI-008 — ATTUNE Integration Hardening
+
+**Contributor:** Development workflow
+**Status:** DONE
+**Date:** 2026-09-11
+**Goal:** Harden frontend behavior around backend startup, failures, malformed responses, stale responses, and Real/Demo transitions without changing the backend.
+
+**Files changed**
+- neuro-attention/src/ui.html
+- tests/test_ui.py
+- tests/TEST_REGISTRY.md
+- AI_LEDGER.md
+
+**Implementation**
+- Added explicit connecting, connected, and unavailable system states.
+- Rejected explicit non-OK HTTP responses, JSON failures, and malformed top-level payloads while continuing polling.
+- Added monotonically increasing Real request sequencing alongside existing mode-generation protection.
+- Cleared live measurements on backend failure and warmup; valid later responses recover normally.
+- Kept Demo data isolated from Real data and prevented stale Real responses from updating Demo Mode.
+- Preserved strict UI-007 lapse-score validation, bounded in-memory history, safe malformed EEG handling, and the unchanged 13-field backend contract.
+
+**Tests added**
+- UI-008-T01 through UI-008-T29 covering connection states, failures, recovery, stale responses, mode isolation, warmup, EEG safety, history gaps/bounds, and preserved contracts.
+
+**Tests run**
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.test_ui -v
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
+```
+
+**Result**
+- Focused UI suite: PASS, 119 tests.
+- Full discovery: 119 UI tests pass; known import errors remain only for `test_combined` and `test_driving_pilot` because system Python lacks numpy.
+- No packages installed, no backend/model/preprocessing files changed, no commit or push performed.
+
+**Known limitations**
+- Tests use the existing Node VM and mocked fetch rather than a browser or live HTTP server.
+- CombinedPipeline remains intentionally disconnected; signal-quality and artifact metrics remain unavailable in Real Mode.
+
+**Next recommended task**
+- UI-009 final polish and handoff.
+
+**Human review needed**
+- Review final UI behavior with a dependency-equipped runtime and actual browser rendering before backend integration.

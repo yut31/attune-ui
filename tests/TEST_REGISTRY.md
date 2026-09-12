@@ -109,13 +109,42 @@ Every test added by any human or AI must be registered here.
 | UI-007-T17 | Lapse-score readiness | unit | tests/test_ui.py | test_ui_007_t17_no_randomness | no Math.random is introduced | PASS |
 | UI-007-T18 | Lapse-score readiness | unit | tests/test_ui.py | test_ui_007_t18_no_external_resources | no external dependencies or resources are introduced | PASS |
 | UI-007-T19 | Lapse-score readiness | unit | tests/test_ui.py | test_ui_007_t19_previous_features_remain | UI-001 through UI-006 feature markers remain present | PASS |
-| UI-008-T01 | transport | integration | TBD | valid WebSocket message | UI receives payload | PLANNED |
-| UI-008-T02 | transport | integration | TBD | malformed WebSocket message | app remains stable | PLANNED |
-| UI-008-T03 | transport | integration | TBD | disconnect | disconnected state shown | PLANNED |
-| UI-009-T01 | mock integration | integration | TBD | backend to UI | prediction visible | PLANNED |
-| UI-010-T01 | real adapter | integration | TBD | real output mapping | conforms to UI contract | PLANNED |
-| UI-011-T01 | demo | smoke | manual | full startup | system starts successfully | PLANNED |
-| UI-011-T02 | demo fallback | smoke | manual | EEG unavailable | demo mode usable | PLANNED |
+| UI-008-T01 | Integration hardening | unit | tests/test_ui.py | test_ui_008_t01_initial_connecting_state | initial Real Mode is connecting before a valid response | PASS |
+| UI-008-T02 | Integration hardening | unit | tests/test_ui.py | test_ui_008_t02_valid_response_marks_connected | valid response marks backend connected | PASS |
+| UI-008-T03 | Integration hardening | unit | tests/test_ui.py | test_ui_008_t03_fetch_rejection_continues_polling | fetch rejection is handled and polling continues | PASS |
+| UI-008-T04 | Integration hardening | unit | tests/test_ui.py | test_ui_008_t04_non_ok_response_unavailable | explicit non-OK response marks backend unavailable | PASS |
+| UI-008-T05 | Integration hardening | unit | tests/test_ui.py | test_ui_008_t05_json_parse_failure_safe | JSON failure leaves safe unavailable UI | PASS |
+| UI-008-T06 | Integration hardening | unit | tests/test_ui.py | test_ui_008_t06_malformed_top_level_safe | malformed top-level payload produces no measurements | PASS |
+| UI-008-T07 | Integration hardening | unit | tests/test_ui.py | test_ui_008_t07_failure_clears_previous_measurements | failure clears previously displayed live measurements | PASS |
+| UI-008-T08 | Integration hardening | unit | tests/test_ui.py | test_ui_008_t08_success_recovers_after_failure | later valid response recovers the UI | PASS |
+| UI-008-T09 | Integration hardening | unit | tests/test_ui.py | test_ui_008_t09_older_real_response_ignored | older Real response cannot overwrite newer response | PASS |
+| UI-008-T10 | Integration hardening | unit | tests/test_ui.py | test_ui_008_t10_mode_generation_ignores_real_after_demo | mode generation rejects stale Real response in Demo | PASS |
+| UI-008-T11 | Integration hardening | unit | tests/test_ui.py | test_ui_008_t11_real_to_demo_isolates_history | Real history is cleared on Demo entry | PASS |
+| UI-008-T12 | Integration hardening | unit | tests/test_ui.py | test_ui_008_t12_demo_to_real_clears_simulated_history | Demo history is cleared on Real entry | PASS |
+| UI-008-T13 | Integration hardening | unit | tests/test_ui.py | test_ui_008_t13_real_waits_for_fresh_response | returning to Real waits for fresh backend data | PASS |
+| UI-008-T14 | Integration hardening | unit | tests/test_ui.py | test_ui_008_t14_simulated_vigilance_does_not_leak | simulated vigilance does not leak into Real | PASS |
+| UI-008-T15 | Integration hardening | unit | tests/test_ui.py | test_ui_008_t15_simulated_signal_does_not_leak | simulated signal/artifact does not leak into Real | PASS |
+| UI-008-T16 | Integration hardening | unit | tests/test_ui.py | test_ui_008_t16_warmup_does_not_show_talker_a | warmup does not present default Talker A as genuine | PASS |
+| UI-008-T17 | Integration hardening | unit | tests/test_ui.py | test_ui_008_t17_warmup_clears_correlations_and_gains | warmup clears correlations and gains | PASS |
+| UI-008-T18 | Integration hardening | unit | tests/test_ui.py | test_ui_008_t18_warmup_vigilance_unavailable | vigilance stays unavailable during warmup | PASS |
+| UI-008-T19 | Integration hardening | unit | tests/test_ui.py | test_ui_008_t19_warmup_signal_unavailable | signal quality stays unavailable during warmup | PASS |
+| UI-008-T20 | Integration hardening | unit | tests/test_ui.py | test_ui_008_t20_malformed_empty_eeg_safe | malformed/empty EEG is safe | PASS |
+| UI-008-T21 | Integration hardening | unit | tests/test_ui.py | test_ui_008_t21_real_mode_never_creates_synthetic_eeg | Real Mode does not create synthetic EEG | PASS |
+| UI-008-T22 | Integration hardening | unit | tests/test_ui.py | test_ui_008_t22_failure_creates_history_gap | backend failure creates a lapse history gap | PASS |
+| UI-008-T23 | Integration hardening | unit | tests/test_ui.py | test_ui_008_t23_history_remains_bounded | real history remains limited to 30 bins | PASS |
+| UI-008-T24 | Integration hardening | unit | tests/test_ui.py | test_ui_008_t24_no_local_storage | history is not persisted with localStorage | PASS |
+| UI-008-T25 | Integration hardening | unit | tests/test_ui.py | test_ui_008_t25_no_randomness | no Math.random is used | PASS |
+| UI-008-T26 | Integration hardening | unit | tests/test_ui.py | test_ui_008_t26_state_polling_is_no_store | /state polling remains cache no-store | PASS |
+| UI-008-T27 | Integration hardening | unit | tests/test_ui.py | test_ui_008_t27_backend_contract_unchanged | live_demo.STATE remains unchanged | PASS |
+| UI-008-T28 | Integration hardening | unit | tests/test_ui.py | test_ui_008_t28_lapse_score_readiness_preserved | UI-007 optional lapse-score behavior remains | PASS |
+| UI-008-T29 | Integration hardening | unit | tests/test_ui.py | test_ui_008_t29_previous_features_remain | UI-001 through UI-007 features remain | PASS |
+| UI-009-T01 | transport | integration | TBD | valid WebSocket message | UI receives payload | PLANNED |
+| UI-009-T02 | transport | integration | TBD | malformed WebSocket message | app remains stable | PLANNED |
+| UI-009-T03 | transport | integration | TBD | disconnect | disconnected state shown | PLANNED |
+| UI-010-T01 | mock integration | integration | TBD | backend to UI | prediction visible | PLANNED |
+| UI-011-T01 | real adapter | integration | TBD | real output mapping | conforms to UI contract | PLANNED |
+| UI-012-T01 | demo | smoke | manual | full startup | system starts successfully | PLANNED |
+| UI-012-T02 | demo fallback | smoke | manual | EEG unavailable | demo mode usable | PLANNED |
 
 ## Adding a test
 

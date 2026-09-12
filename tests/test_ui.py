@@ -920,5 +920,214 @@ console.log(JSON.stringify([elements.signalHistory.innerHTML,elements.signalHist
             self.assertIn(element_id, self.ui.ids)
 
 
+class UIIntegrationHardeningTests(unittest.TestCase):
+    setUp = UIVigilanceTests.setUp
+    run_js = UIVigilanceTests.run_js
+
+    def test_ui_008_t01_initial_connecting_state(self):
+        self.assertIn('data-state="waiting"', self.html)
+        self.assertIn('>Connecting</span>', self.html)
+
+    def test_ui_008_t02_valid_response_marks_connected(self):
+        values = self.run_js(r"""
+requests[0].resolve({json:async()=>({running:true,lapse_score:.5})});
+await flush();
+console.log(JSON.stringify([elements.systemStatus.dataset.state,elements.systemText.textContent]));
+""")
+        self.assertEqual(values, ['connected','System running'])
+
+    def test_ui_008_t03_fetch_rejection_continues_polling(self):
+        values = self.run_js(r"""
+requests[0].reject(Error('offline'));await flush();
+const first=elements.systemText.textContent;run('tick()');
+const count=requests.length;requests[1].resolve({json:async()=>({running:true})});await flush();
+console.log(JSON.stringify([first,count,elements.systemStatus.dataset.state]));
+""")
+        self.assertEqual(values, ['Disconnected',2,'connected'])
+
+    def test_ui_008_t04_non_ok_response_unavailable(self):
+        values = self.run_js(r"""
+requests[0].resolve({ok:false,json:async()=>({running:true})});await flush();
+console.log(JSON.stringify([elements.systemStatus.dataset.state,elements.systemText.textContent,
+ elements.lapseRisk.textContent]));
+""")
+        self.assertEqual(values, ['unavailable','Disconnected','—'])
+
+    def test_ui_008_t05_json_parse_failure_safe(self):
+        values = self.run_js(r"""
+requests[0].resolve({json:async()=>{throw Error('bad json')}});await flush();
+console.log(JSON.stringify([elements.systemStatus.dataset.state,elements.lapseRisk.textContent,
+ elements.eeg.length]));
+""")
+        self.assertEqual(values, ['unavailable','—',None])
+
+    def test_ui_008_t06_malformed_top_level_safe(self):
+        values = self.run_js(r"""
+requests[0].resolve({json:async()=>[1,2,3]});await flush();
+console.log(JSON.stringify([elements.systemStatus.dataset.state,elements.dbA.textContent,
+ elements.lapseRisk.textContent]));
+""")
+        self.assertEqual(values, ['unavailable','— dB','—'])
+
+    def test_ui_008_t07_failure_clears_previous_measurements(self):
+        values = self.run_js(r"""
+requests[0].resolve({json:async()=>({running:true,attended:1,gain_b_db:0,corr_b:.8,lapse_score:.8,eeg:[[0,1]]})});
+await flush();run('tick()');requests[1].reject(Error('offline'));await flush();
+console.log(JSON.stringify([elements.dbB.textContent,elements.corrB.textContent,
+ elements.lapseRisk.textContent,elements.eegStatus.textContent]));
+""")
+        self.assertEqual(values, ['— dB','—','—','Disconnected'])
+
+    def test_ui_008_t08_success_recovers_after_failure(self):
+        values = self.run_js(r"""
+requests[0].reject(Error('offline'));await flush();run('tick()');
+requests[1].resolve({json:async()=>({running:true,attended:1,lapse_score:.6})});await flush();
+console.log(JSON.stringify([elements.systemStatus.dataset.state,elements.lapseRisk.textContent]));
+""")
+        self.assertEqual(values, ['connected','60% · pipeline'])
+
+    def test_ui_008_t09_older_real_response_ignored(self):
+        values = self.run_js(r"""
+const older=run('tick()'),newer=run('tick()');
+requests[2].resolve({json:async()=>({running:true,attended:1,lapse_score:.8})});await newer;
+requests[1].resolve({json:async()=>({running:true,attended:0,lapse_score:.2})});await older;
+console.log(JSON.stringify([elements.lapseRisk.textContent,elements.banner.textContent]));
+""")
+        self.assertEqual(values, ['80% · pipeline','Attending to Talker B'])
+
+    def test_ui_008_t10_mode_generation_ignores_real_after_demo(self):
+        values = self.run_js(r"""
+const stale=run('tick()');run('toggleDemo()');clock=10000;await run('tick()');
+requests[1].resolve({json:async()=>({running:true,attended:1,lapse_score:.9})});await stale;
+console.log(JSON.stringify([elements.systemText.textContent,elements.lapseRisk.textContent,
+ elements.banner.textContent]));
+""")
+        self.assertEqual(values, ['Demo mode','85% · simulated','Simulated attention: Talker B'])
+
+    def test_ui_008_t11_real_to_demo_isolates_history(self):
+        values = self.run_js(r"""
+requests[0].resolve({json:async()=>({running:true,lapse_score:.8})});await flush();
+run('toggleDemo()');
+console.log(JSON.stringify([run('realHistory.length'),run('realLapseHistory.length'),
+ elements.historyMode.textContent]));
+""")
+        self.assertEqual(values, [0,0,'DEMO MODE · SIMULATED HISTORY'])
+
+    def test_ui_008_t12_demo_to_real_clears_simulated_history(self):
+        values = self.run_js(r"""
+run('toggleDemo()');clock=10000;await run('tick()');run('toggleDemo()');
+console.log(JSON.stringify([elements.lapseHistory.innerHTML,elements.signalHistory.innerHTML,
+ elements.historyMode.textContent,elements.lapseRisk.textContent]));
+""")
+        self.assertEqual(values, ['', '', 'Real session · attention observations only','—'])
+
+    def test_ui_008_t13_real_waits_for_fresh_response(self):
+        values = self.run_js(r"""
+run('toggleDemo()');await run('tick()');run('toggleDemo()');
+console.log(JSON.stringify([elements.systemText.textContent,elements.lapseRisk.textContent,
+ elements.qualityValue.textContent,requests.length]));
+""")
+        self.assertEqual(values, ['Connecting','—','—',2])
+
+    def test_ui_008_t14_simulated_vigilance_does_not_leak(self):
+        values = self.run_js(r"""
+run('toggleDemo()');clock=12000;await run('tick()');run('toggleDemo()');
+console.log(JSON.stringify([elements.lapseRisk.textContent,elements.vigilanceStatus.textContent]));
+""")
+        self.assertEqual(values, ['—','Awaiting pipeline'])
+
+    def test_ui_008_t15_simulated_signal_does_not_leak(self):
+        values = self.run_js(r"""
+run('toggleDemo()');clock=10000;await run('tick()');run('toggleDemo()');
+console.log(JSON.stringify([elements.qualityValue.textContent,elements.artifactStatus.textContent]));
+""")
+        self.assertEqual(values, ['—','Not connected'])
+
+    def test_ui_008_t16_warmup_does_not_show_talker_a(self):
+        values = self.run_js(r"""
+requests[0].resolve({json:async()=>({running:false,attended:0,gain_a_db:0,corr_a:1,lapse_score:.9,eeg:[[0,1]]})});await flush();
+console.log(JSON.stringify([elements.banner.textContent,elements.dbA.textContent,elements.corrA.textContent]));
+""")
+        self.assertEqual(values, ['Waiting for the listener…','— dB','—'])
+
+    def test_ui_008_t17_warmup_clears_correlations_and_gains(self):
+        values = self.run_js(r"""
+requests[0].resolve({json:async()=>({running:false,gain_a_db:-2,gain_b_db:-3,corr_a:.2,corr_b:.1})});await flush();
+console.log(JSON.stringify([elements.dbA.textContent,elements.dbB.textContent,elements.corrA.textContent,elements.corrB.textContent]));
+""")
+        self.assertEqual(values, ['— dB','— dB','—','—'])
+
+    def test_ui_008_t18_warmup_vigilance_unavailable(self):
+        values = self.run_js(r"""
+requests[0].resolve({json:async()=>({running:false,lapse_score:.7})});await flush();
+console.log(JSON.stringify([elements.vigilanceStatus.textContent,elements.lapseRisk.textContent]));
+""")
+        self.assertEqual(values, ['Awaiting pipeline','—'])
+
+    def test_ui_008_t19_warmup_signal_unavailable(self):
+        values = self.run_js(r"""
+requests[0].resolve({json:async()=>({running:false})});await flush();
+console.log(JSON.stringify([elements.signalStatus.textContent,elements.qualityValue.textContent,elements.artifactStatus.textContent]));
+""")
+        self.assertEqual(values, ['Awaiting pipeline','—','Not connected'])
+
+    def test_ui_008_t20_malformed_empty_eeg_safe(self):
+        values = self.run_js(r"""
+requests[0].resolve({json:async()=>({running:true,eeg:[[],[1]]})});await flush();
+run('drawEEG()');
+console.log(JSON.stringify([elements.eegStatus.textContent,run('eeg.length')]));
+""")
+        self.assertEqual(values, ['Awaiting samples',0])
+
+    def test_ui_008_t21_real_mode_never_creates_synthetic_eeg(self):
+        values = self.run_js(r"""
+requests[0].resolve({json:async()=>({running:true})});await flush();
+console.log(JSON.stringify(run('eeg')));
+""")
+        self.assertEqual(values, [])
+
+    def test_ui_008_t22_failure_creates_history_gap(self):
+        values = self.run_js(r"""
+requests[0].resolve({json:async()=>({running:true,lapse_score:.8})});await flush();
+run('tick()');requests[1].reject(Error('offline'));await flush();
+console.log(JSON.stringify([run('realLapseHistory'),elements.lapseHistory.innerHTML.includes('history-bin gap')]));
+""")
+        self.assertEqual(values[0][-1], {'time':0,'lapse':None})
+        self.assertTrue(values[1])
+
+    def test_ui_008_t23_history_remains_bounded(self):
+        values = self.run_js(r"""
+for(let i=0;i<100;i++)run(`recordLapse(${i},.5)`);
+console.log(JSON.stringify(run('realLapseHistory')));
+""")
+        self.assertEqual(len(values), 30)
+        self.assertEqual(values[0]['time'],70)
+
+    def test_ui_008_t24_no_local_storage(self):
+        self.assertNotIn('localStorage', self.script)
+
+    def test_ui_008_t25_no_randomness(self):
+        self.assertNotRegex(self.script, r'Math\s*(?:\.\s*random|\[\s*[\'\"]random)')
+
+    def test_ui_008_t26_state_polling_is_no_store(self):
+        self.assertIn('fetch("/state",{cache:"no-store"})', self.script)
+
+    def test_ui_008_t27_backend_contract_unchanged(self):
+        self.assertEqual(set(load_live_demo().STATE), set(STATE_FIELDS))
+
+    def test_ui_008_t28_lapse_score_readiness_preserved(self):
+        value = self.run_js(r"""
+console.log(JSON.stringify([context.normalizeState({lapse_score:0}).vigilance.lapseScore,
+context.normalizeState({lapse_score:'0.5'}).vigilance.lapseScore]));
+""")
+        self.assertEqual(value, [0,None])
+
+    def test_ui_008_t29_previous_features_remain(self):
+        for heading in ('ATTUNE','Talker A','Talker B','Vigilance','Signal quality','Session History'):
+            self.assertIn(heading, self.ui.headings)
+        for element_id in ('eeg','demoToggle','demoDisclosure','lapseRisk','qualityValue'):
+            self.assertIn(element_id, self.ui.ids)
+
+
 if __name__ == '__main__':
     unittest.main()
