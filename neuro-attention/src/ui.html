@@ -223,6 +223,7 @@
     const number = value => typeof value === "number" && Number.isFinite(value) ? value : null;
     const text = value => typeof value === "string" ? value : "";
     const elapsed = number(s.t), accuracy = number(s.correct_frac);
+    const lapseScore = number(s.lapse_score);
     const traces = s.eeg;
     const validEEG = Array.isArray(traces) && traces.length > 0 &&
       Array.isArray(traces[0]) && traces[0].length >= 2 &&
@@ -235,6 +236,9 @@
         attendedTalker: s.attended === 0 || s.attended === 1 ? s.attended : null,
         correlationA: number(s.corr_a), correlationB: number(s.corr_b),
         gainA: number(s.gain_a_db), gainB: number(s.gain_b_db)
+      },
+      vigilance: {
+        lapseScore: lapseScore !== null && lapseScore >= 0 && lapseScore <= 1 ? lapseScore : null
       },
       session: {
         accuracy: accuracy !== null && accuracy >= 0 && accuracy <= 1 ? accuracy : null,
@@ -266,7 +270,7 @@
     $("needle").style.left = "50%";
   }
   const HISTORY_LIMIT = 30; // One-second bins; in-memory only, never persisted.
-  let realHistory = [], historySecond = null;
+  let realHistory = [], realLapseHistory = [], historySecond = null;
   function demoHistory(t){
     const end = Math.floor(t);
     return Array.from({length:Math.min(HISTORY_LIMIT,end+1)}, (_,i) => {
@@ -284,10 +288,23 @@
     }
     return realHistory;
   }
+  function recordLapse(time, lapseScore){
+    realLapseHistory = realLapseHistory.filter(point => point.time > time-HISTORY_LIMIT);
+    const existing = realLapseHistory.find(point => point.time === time);
+    if(existing){
+      if(existing.lapse === null && lapseScore !== null) existing.lapse = lapseScore;
+    }else{
+      realLapseHistory.push({time, lapse: lapseScore});
+      realLapseHistory = realLapseHistory.slice(-HISTORY_LIMIT);
+    }
+    return realLapseHistory;
+  }
   function historyBars(id, points, end, metric){
     const bins = Array.from({length:HISTORY_LIMIT}, (_,i) => {
       const point = points.find(item => item.time === end-HISTORY_LIMIT+1+i);
-      if(!point) return '<span class="history-bin gap" style="height:2px"></span>';
+      if(!point || (metric !== 'attended' && point[metric] === null)){
+        return '<span class="history-bin gap" style="height:2px"></span>';
+      }
       const attention = metric === 'attended';
       const value = attention ? (point.attended === 0 ? 'A' : 'B') : Math.round(point[metric]*100)+'%';
       const type = attention ? (point.attended === 0 ? ' talker-a' : ' talker-b')
@@ -302,6 +319,7 @@
   }
   function resetHistory(){
     realHistory = [];
+    realLapseHistory = [];
     historySecond = null;
     for(const id of ['attentionHistory','lapseHistory','signalHistory']){
       $(id).innerHTML = '';
@@ -327,6 +345,12 @@
       historyBars('signalHistory',points,second,'quality');
       $('lapseHistoryStatus').textContent = 'Simulated lapse risk · 0–100%';
       $('signalHistoryStatus').textContent = 'Simulated EEG quality · 0–100%';
+    }else{
+      const lapsePoints = recordLapse(second,
+        state && state.running && !state.done ? state.vigilance.lapseScore : null);
+      historyBars('lapseHistory',lapsePoints,second,'lapse');
+      $('lapseHistoryStatus').textContent = lapsePoints.some(point => point.lapse !== null)
+        ? 'Pipeline lapse risk · 0–100%' : 'Awaiting pipeline';
     }
   }
   // Frontend illustration only: quality falls from .95 to .25 and recovers over 20 s.
@@ -368,8 +392,8 @@
     // Display-only thresholds, not model or clinical decision thresholds.
     return risk < 0.4 ? "Attentive" : risk < 0.7 ? "Watch" : "Elevated lapse risk";
   }
-  function paintVigilance(t = null){
-    if(t === null){
+  function paintVigilance(risk = null, simulated = false){
+    if(risk === null){
       $("vigilance").dataset.level = "unavailable";
       $("vigilanceStatus").textContent = "Awaiting pipeline";
       $("vigilanceNote").textContent = "Combined vigilance output not connected yet.";
@@ -377,11 +401,12 @@
       $("lapseFill").style.width = "0%";
       return;
     }
-    const risk = demoLapseRisk(t);
     $("vigilance").dataset.level = risk < 0.4 ? "attentive" : risk < 0.7 ? "watch" : "elevated";
     $("vigilanceStatus").textContent = vigilanceLabel(risk);
-    $("vigilanceNote").textContent = "Simulated vigilance · time-based illustration, not derived from EEG.";
-    $("lapseRisk").textContent = Math.round(100*risk)+"% · simulated";
+    $("vigilanceNote").textContent = simulated
+      ? "Simulated vigilance · time-based illustration, not derived from EEG."
+      : "Pipeline vigilance output · not a clinical measurement.";
+    $("lapseRisk").textContent = Math.round(100*risk)+"%"+(simulated ? " · simulated" : " · pipeline");
     $("lapseFill").style.width = (100*risk)+"%";
   }
   // Pure visualization data: a 16-second cycle, independent of update count.
@@ -444,7 +469,7 @@
       if(generation !== modeGeneration) return;
       const state = normalizeState(raw);
       updateHistory(state);
-      paintVigilance(demoMode ? state.elapsedSeconds : null);
+      paintVigilance(demoMode ? demoLapseRisk(state.elapsedSeconds) : state.vigilance.lapseScore, demoMode);
       paintSignal(demoMode ? state.elapsedSeconds : null);
       eeg = state.eeg;
       $("eegEmpty").hidden = eeg.length > 0;

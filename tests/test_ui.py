@@ -418,9 +418,10 @@ console.log(JSON.stringify([0,.399999,.4,.699999,.7,1].map(x=>run(`vigilanceLabe
 
     def test_ui_003_t08_contract_unchanged(self):
         self.assertEqual(set(load_live_demo().STATE), set(STATE_FIELDS))
-        self.assertNotIn('lapse_score', self.script)
-        self.assertIn('paintVigilance(demoMode ? state.elapsedSeconds : null)', self.script)
-        self.assertEqual(set(re.findall(r'\bs\s*\.\s*(\w+)', self.script)), set(STATE_FIELDS))
+        self.assertIn('lapse_score', self.script)
+        self.assertIn('state.vigilance.lapseScore', self.script)
+        self.assertTrue(set(STATE_FIELDS).issubset(
+            set(re.findall(r'\bs\s*\.\s*(\w+)', self.script))))
         helper = self.script.split('function demoLapseRisk(t){', 1)[1].split('function vigilanceLabel', 1)[0]
         for field in ('eeg', 'corr_a', 'corr_b', 'correct_frac', 'attended', 'gain'):
             self.assertNotIn(field, helper)
@@ -509,7 +510,8 @@ console.log(JSON.stringify(times.map(t=>{
 
     def test_ui_004_t10_backend_contract_unchanged(self):
         self.assertEqual(set(load_live_demo().STATE), set(STATE_FIELDS))
-        self.assertEqual(set(re.findall(r'\bs\s*\.\s*(\w+)', self.script)), set(STATE_FIELDS))
+        self.assertTrue(set(STATE_FIELDS).issubset(
+            set(re.findall(r'\bs\s*\.\s*(\w+)', self.script))))
         self.assertIn('paintSignal(demoMode ? state.elapsedSeconds : null)', self.script)
         helper = self.script.split('function demoSignal(t){', 1)[1].split('function qualityLabel', 1)[0]
         for field in ('eeg', 'corr_a', 'corr_b', 'attended', 'gain', 'correct_frac', 'lapse'):
@@ -611,7 +613,8 @@ console.log(JSON.stringify([elements.lapseHistory.innerHTML,elements.lapseHistor
 
     def test_ui_005_t09_real_vigilance_unavailable(self):
         values = self.real_history_snapshot()
-        self.assertEqual(values[:2], ['', 'Awaiting pipeline'])
+        self.assertIn('history-bin gap', values[0])
+        self.assertEqual(values[1], 'Awaiting pipeline')
         self.assertEqual(set(values[4][0]), {'time', 'attended'})
 
     def test_ui_005_t10_real_signal_unavailable(self):
@@ -619,7 +622,8 @@ console.log(JSON.stringify([elements.lapseHistory.innerHTML,elements.lapseHistor
 
     def test_ui_005_t11_contract(self):
         self.assertEqual(set(load_live_demo().STATE), set(STATE_FIELDS))
-        self.assertEqual(set(re.findall(r'\bs\s*\.\s*(\w+)', self.script)), set(STATE_FIELDS))
+        self.assertTrue(set(STATE_FIELDS).issubset(
+            set(re.findall(r'\bs\s*\.\s*(\w+)', self.script))))
 
     def test_ui_005_t12_preserved_features(self):
         for heading in ('ATTUNE','Talker A','Talker B','Vigilance','Signal quality','Live EEG activity'):
@@ -649,7 +653,8 @@ console.log(JSON.stringify([demo,cleared,stale,real,elements.lapseHistory.innerH
         self.assertNotIn('SIMULATED', values[1][4])
         self.assertEqual(values[2], 0)
         self.assertEqual(values[3], [{'time':31,'attended':1}])
-        self.assertEqual(values[4:], ['', ''])
+        self.assertIn('history-bin gap', values[4])
+        self.assertEqual(values[5], '')
 
     def test_ui_005_t14_no_external_dependencies(self):
         for tag, attrs in self.ui.elements:
@@ -676,6 +681,7 @@ console.log(JSON.stringify(run(`normalizeState({running:true,done:false,t:12.5,a
 """)
         self.assertEqual(value, dict(running=True,done=False,elapsedSeconds=12.5,
             attention=dict(attendedTalker=1,correlationA=.2,correlationB=.8,gainA=-9,gainB=0),
+            vigilance=dict(lapseScore=None),
             session=dict(accuracy=.75,eegSource='recorded',audioSource='tracks',mode='playing'),
             eeg=[[0,1],[-1,0]]))
 
@@ -685,6 +691,7 @@ console.log(JSON.stringify([null,undefined,0,'bad',true,[],{}].map(x=>context.no
 """)
         expected = dict(running=False,done=False,elapsedSeconds=None,
             attention=dict(attendedTalker=None,correlationA=None,correlationB=None,gainA=None,gainB=None),
+            vigilance=dict(lapseScore=None),
             session=dict(accuracy=None,eegSource='',audioSource='',mode=''),eeg=[])
         self.assertTrue(all(value == expected for value in values))
 
@@ -750,9 +757,11 @@ console.log(JSON.stringify(run('realHistory')));
         value = self.run_js(r"""
 console.log(JSON.stringify(context.normalizeState({lapseScore:.8,signalQuality:.9,artifact:true,confidence:.8})));
 """)
-        self.assertEqual(set(value),{'running','done','elapsedSeconds','attention','session','eeg'})
+        self.assertEqual(set(value),{'running','done','elapsedSeconds','attention','vigilance','session','eeg'})
         for field in ('lapseScore','signalQuality','artifact','confidence'):
-            self.assertNotIn(field,json.dumps(value))
+            if field != 'lapseScore':
+                self.assertNotIn(field,json.dumps(value))
+        self.assertIsNone(value['vigilance']['lapseScore'])
 
     def test_ui_006_t12_backend_unchanged(self):
         self.assertEqual(set(load_live_demo().STATE),set(STATE_FIELDS))
@@ -773,6 +782,142 @@ console.log(JSON.stringify([0,8,16,40].map(t=>[run(`normalizeState(demoState(${t
             self.assertIn(heading,self.ui.headings)
         for element_id in ('eeg','demoToggle','demoDisclosure','lapseRisk','qualityValue'):
             self.assertIn(element_id,self.ui.ids)
+
+
+class UIVigilanceReadinessTests(unittest.TestCase):
+    setUp = UIVigilanceTests.setUp
+    run_js = UIVigilanceTests.run_js
+
+    def test_ui_007_t01_normalized_vigilance_object(self):
+        value = self.run_js(r"""
+console.log(JSON.stringify(run('normalizeState({}).vigilance')));
+""")
+        self.assertEqual(value, {'lapseScore': None})
+
+    def test_ui_007_t02_valid_lapse_scores(self):
+        values = self.run_js(r"""
+console.log(JSON.stringify([0,.5,1].map(x=>context.normalizeState({lapse_score:x}).vigilance.lapseScore)));
+""")
+        self.assertEqual(values, [0,.5,1])
+
+    def test_ui_007_t03_missing_and_null_scores(self):
+        values = self.run_js(r"""
+console.log(JSON.stringify([context.normalizeState({}).vigilance.lapseScore,
+ context.normalizeState({lapse_score:null}).vigilance.lapseScore]));
+""")
+        self.assertEqual(values, [None,None])
+
+    def test_ui_007_t04_numeric_string_rejected(self):
+        value = self.run_js(r"""
+console.log(JSON.stringify(context.normalizeState({lapse_score:'0.5'}).vigilance.lapseScore));
+""")
+        self.assertIsNone(value)
+
+    def test_ui_007_t05_nonfinite_scores_rejected(self):
+        values = self.run_js(r"""
+console.log(JSON.stringify([NaN,Infinity,-Infinity].map(x=>context.normalizeState({lapse_score:x}).vigilance.lapseScore)));
+""")
+        self.assertEqual(values, [None,None,None])
+
+    def test_ui_007_t06_out_of_range_scores_rejected(self):
+        values = self.run_js(r"""
+console.log(JSON.stringify([-0.01,1.01].map(x=>context.normalizeState({lapse_score:x}).vigilance.lapseScore)));
+""")
+        self.assertEqual(values, [None,None])
+
+    def test_ui_007_t07_no_fabricated_metrics(self):
+        value = self.run_js(r"""
+console.log(JSON.stringify(context.normalizeState({lapse_score:.5,signalQuality:.9,artifact:true,confidence:.8})));
+""")
+        self.assertEqual(value['vigilance']['lapseScore'], .5)
+        for field in ('signalQuality','artifact','confidence'):
+            self.assertNotIn(field, json.dumps(value))
+
+    def test_ui_007_t08_real_missing_score_is_unavailable(self):
+        values = self.run_js(r"""
+requests[0].resolve({json:async()=>({running:true})});
+await flush();
+console.log(JSON.stringify([elements.vigilanceStatus.textContent,elements.lapseRisk.textContent,
+ elements.vigilanceNote.textContent,elements.lapseFill.style.width]));
+""")
+        self.assertEqual(values, ['Awaiting pipeline','—','Combined vigilance output not connected yet.','0%'])
+
+    def test_ui_007_t09_real_score_uses_existing_label(self):
+        values = self.run_js(r"""
+requests[0].resolve({json:async()=>({running:true,lapse_score:.8})});
+await flush();
+console.log(JSON.stringify([elements.vigilanceStatus.textContent,elements.lapseRisk.textContent,
+ elements.vigilanceNote.textContent,elements.lapseFill.style.width]));
+""")
+        self.assertEqual(values, ['Elevated lapse risk','80% · pipeline',
+                                  'Pipeline vigilance output · not a clinical measurement.','80%'])
+
+    def test_ui_007_t10_real_score_not_simulated(self):
+        values = self.run_js(r"""
+requests[0].resolve({json:async()=>({running:true,lapse_score:.5})});
+await flush();
+console.log(JSON.stringify([elements.lapseRisk.textContent,elements.vigilanceNote.textContent]));
+""")
+        self.assertTrue(all('simulated' not in value.lower() for value in values))
+
+    def test_ui_007_t11_demo_remains_deterministic_and_separate(self):
+        values = self.run_js(r"""
+const a=run('demoLapseRisk(12)'),b=run('demoLapseRisk(12)');
+console.log(JSON.stringify([a,b,context.normalizeState({lapse_score:.99}).vigilance.lapseScore]));
+""")
+        self.assertEqual(values[0], values[1])
+        self.assertEqual(values[2], .99)
+
+    def test_ui_007_t12_real_history_consumes_normalized_score(self):
+        values = self.run_js(r"""
+run('resetHistory()');
+run('updateHistory(normalizeState({running:true,lapse_score:.5}))');
+console.log(JSON.stringify(run('realLapseHistory')));
+""")
+        self.assertEqual(values, [{'time':0,'lapse':.5}])
+
+    def test_ui_007_t13_missing_real_values_are_gaps(self):
+        values = self.run_js(r"""
+run('resetHistory()');
+run('updateHistory(normalizeState({running:true,lapse_score:.5}))');
+clock=1000;run('updateHistory(normalizeState({running:true}))');
+console.log(JSON.stringify([run('realLapseHistory'),elements.lapseHistory.innerHTML.includes('title="1 s: 0%"'),
+ elements.lapseHistory.innerHTML.match(/history-bin gap/g).length]));
+""")
+        self.assertEqual(values[0], [{'time':0,'lapse':.5},{'time':1,'lapse':None}])
+        self.assertFalse(values[1])
+        self.assertEqual(values[2], 29)
+
+    def test_ui_007_t14_real_signal_history_unavailable(self):
+        values = self.run_js(r"""
+run('resetHistory()');
+run('updateHistory(normalizeState({running:true,lapse_score:.5}))');
+console.log(JSON.stringify([elements.signalHistory.innerHTML,elements.signalHistoryStatus.textContent]));
+""")
+        self.assertEqual(values, ['', 'Awaiting pipeline'])
+
+    def test_ui_007_t15_state_fetch_is_preserved(self):
+        self.assertIn('fetch("/state",{cache:"no-store"})', self.script)
+
+    def test_ui_007_t16_backend_state_remains_thirteen_fields(self):
+        self.assertEqual(set(load_live_demo().STATE), set(STATE_FIELDS))
+
+    def test_ui_007_t17_no_randomness(self):
+        self.assertNotRegex(self.script, r'Math\s*(?:\.\s*random|\[\s*[\'\"]random)')
+
+    def test_ui_007_t18_no_external_resources(self):
+        for tag, attrs in self.ui.elements:
+            if tag == 'script':
+                self.assertNotIn('src', attrs)
+            if tag == 'link':
+                self.assertNotIn('href', attrs)
+        self.assertNotRegex(self.script, r'\bimport\s*(?:\(|.*from)')
+
+    def test_ui_007_t19_previous_features_remain(self):
+        for heading in ('ATTUNE','Talker A','Talker B','Vigilance','Signal quality','Session History'):
+            self.assertIn(heading, self.ui.headings)
+        for element_id in ('eeg','demoToggle','demoDisclosure','lapseRisk','qualityValue'):
+            self.assertIn(element_id, self.ui.ids)
 
 
 if __name__ == '__main__':

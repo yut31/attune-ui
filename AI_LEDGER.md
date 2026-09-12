@@ -589,3 +589,47 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
   external services, commits or pushes.
 
 ---
+
+### UI-007 — ATTUNE Real Lapse-Score Readiness
+
+**Contributor:** Development workflow
+**Status:** DONE
+**Date:** 2026-09-11
+**Goal:** Prepare the ATTUNE frontend to consume an optional future real `lapse_score` without changing the backend or connecting CombinedPipeline.
+
+**Files changed**
+- neuro-attention/src/ui.html
+- tests/test_ui.py
+- tests/TEST_REGISTRY.md
+- AI_LEDGER.md
+
+**Implementation**
+- Added optional `vigilance.lapseScore` normalization with strict finite [0,1] validation and no numeric-string coercion.
+- Real Mode preserves `Awaiting pipeline` when the optional value is absent or invalid, and labels valid values as pipeline output.
+- Real lapse history is bounded to 30 seconds and records missing values as gaps without zero substitution or carry-forward.
+- Demo Mode remains deterministic and simulated; signal quality and artifact values remain unavailable in Real Mode.
+- `live_demo.STATE` remains the existing 13-field backend contract. No CombinedPipeline, model, preprocessing, decoder, or backend files changed.
+
+**Tests added**
+- UI-007-T01 through UI-007-T19 covering normalization, strict validation, rendering, demo separation, history gaps, transport, backend contract, no randomness, no external resources, and preserved features.
+
+**Tests run**
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.test_ui -v
+python3 -m unittest discover -s tests -v
+```
+
+**Result**
+- Focused UI suite: PASS, 90 tests.
+- Full discovery: 90 UI tests passed; import errors occurred only in `test_combined` and `test_driving_pilot` because system Python lacks numpy.
+- No packages installed, no commits or pushes performed.
+
+**Known limitations**
+- The backend does not yet provide `lapse_score`, so Real Mode remains unavailable until a future integration task supplies it.
+- Signal-quality and artifact metrics are still not produced by the runtime pipeline.
+
+**Next recommended task**
+- UI-008 integration hardening.
+
+**Human review needed**
+- No frontend implementation blocker; review future backend field ownership before integration.

@@ -90,13 +90,32 @@ Every test added by any human or AI must be registered here.
 | UI-006-T13 | Frontend adapter | unit | tests/test_ui.py | test_ui_006_t13_demo_determinism | demo remains deterministic through adapter | PASS |
 | UI-006-T14 | Frontend adapter | unit | tests/test_ui.py | test_ui_006_t14_no_randomness | no Math.random | PASS |
 | UI-006-T15 | Frontend adapter | unit | tests/test_ui.py | test_ui_006_t15_features_preserved | existing dashboard remains | PASS |
-| UI-007-T01 | transport | integration | TBD | valid WebSocket message | UI receives payload | PLANNED |
-| UI-007-T02 | transport | integration | TBD | malformed WebSocket message | app remains stable | PLANNED |
-| UI-007-T03 | transport | integration | TBD | disconnect | disconnected state shown | PLANNED |
-| UI-008-T01 | mock integration | integration | TBD | backend to UI | prediction visible | PLANNED |
-| UI-009-T01 | real adapter | integration | TBD | real output mapping | conforms to UI contract | PLANNED |
-| UI-010-T01 | demo | smoke | manual | full startup | system starts successfully | PLANNED |
-| UI-010-T02 | demo fallback | smoke | manual | EEG unavailable | demo mode usable | PLANNED |
+| UI-007-T01 | Lapse-score readiness | unit | tests/test_ui.py | test_ui_007_t01_normalized_vigilance_object | normalized vigilance object contains lapseScore | PASS |
+| UI-007-T02 | Lapse-score readiness | unit | tests/test_ui.py | test_ui_007_t02_valid_lapse_scores | finite 0, 0.5, and 1 values normalize unchanged | PASS |
+| UI-007-T03 | Lapse-score readiness | unit | tests/test_ui.py | test_ui_007_t03_missing_and_null_scores | missing and null scores normalize to null | PASS |
+| UI-007-T04 | Lapse-score readiness | unit | tests/test_ui.py | test_ui_007_t04_numeric_string_rejected | numeric strings are rejected without coercion | PASS |
+| UI-007-T05 | Lapse-score readiness | unit | tests/test_ui.py | test_ui_007_t05_nonfinite_scores_rejected | NaN and Infinity normalize to null | PASS |
+| UI-007-T06 | Lapse-score readiness | unit | tests/test_ui.py | test_ui_007_t06_out_of_range_scores_rejected | values outside [0,1] normalize to null | PASS |
+| UI-007-T07 | Lapse-score readiness | unit | tests/test_ui.py | test_ui_007_t07_no_fabricated_metrics | signal quality, artifact, and confidence are not fabricated | PASS |
+| UI-007-T08 | Lapse-score readiness | unit | tests/test_ui.py | test_ui_007_t08_real_missing_score_is_unavailable | missing real score preserves Awaiting pipeline UI | PASS |
+| UI-007-T09 | Lapse-score readiness | unit | tests/test_ui.py | test_ui_007_t09_real_score_uses_existing_label | valid real score uses existing vigilance thresholds | PASS |
+| UI-007-T10 | Lapse-score readiness | unit | tests/test_ui.py | test_ui_007_t10_real_score_not_simulated | real score is labeled pipeline, not simulated | PASS |
+| UI-007-T11 | Lapse-score readiness | unit | tests/test_ui.py | test_ui_007_t11_demo_remains_deterministic_and_separate | demo lapse helper remains deterministic and separate | PASS |
+| UI-007-T12 | Lapse-score readiness | unit | tests/test_ui.py | test_ui_007_t12_real_history_consumes_normalized_score | real history records normalized lapse score | PASS |
+| UI-007-T13 | Lapse-score readiness | unit | tests/test_ui.py | test_ui_007_t13_missing_real_values_are_gaps | missing real seconds render gaps without zero/carry-forward | PASS |
+| UI-007-T14 | Lapse-score readiness | unit | tests/test_ui.py | test_ui_007_t14_real_signal_history_unavailable | real signal-quality history remains unavailable | PASS |
+| UI-007-T15 | Lapse-score readiness | unit | tests/test_ui.py | test_ui_007_t15_state_fetch_is_preserved | no-store /state polling remains intact | PASS |
+| UI-007-T16 | Lapse-score readiness | unit | tests/test_ui.py | test_ui_007_t16_backend_state_remains_thirteen_fields | live_demo.STATE remains the current 13-field contract | PASS |
+| UI-007-T17 | Lapse-score readiness | unit | tests/test_ui.py | test_ui_007_t17_no_randomness | no Math.random is introduced | PASS |
+| UI-007-T18 | Lapse-score readiness | unit | tests/test_ui.py | test_ui_007_t18_no_external_resources | no external dependencies or resources are introduced | PASS |
+| UI-007-T19 | Lapse-score readiness | unit | tests/test_ui.py | test_ui_007_t19_previous_features_remain | UI-001 through UI-006 feature markers remain present | PASS |
+| UI-008-T01 | transport | integration | TBD | valid WebSocket message | UI receives payload | PLANNED |
+| UI-008-T02 | transport | integration | TBD | malformed WebSocket message | app remains stable | PLANNED |
+| UI-008-T03 | transport | integration | TBD | disconnect | disconnected state shown | PLANNED |
+| UI-009-T01 | mock integration | integration | TBD | backend to UI | prediction visible | PLANNED |
+| UI-010-T01 | real adapter | integration | TBD | real output mapping | conforms to UI contract | PLANNED |
+| UI-011-T01 | demo | smoke | manual | full startup | system starts successfully | PLANNED |
+| UI-011-T02 | demo fallback | smoke | manual | EEG unavailable | demo mode usable | PLANNED |
 
 ## Adding a test
 
