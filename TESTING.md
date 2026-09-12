@@ -139,3 +139,20 @@ Do not invent a test command. Inspect the project configuration first.
 All tests must be indexed in:
 
 `tests/TEST_REGISTRY.md`
+
+## Phase 2 React transport client
+
+From the repository root (Node 22.12+; tested with Node 24.18.0):
+
+```bash
+npm test --prefix frontend
+npm run build --prefix frontend
+ATTUNE_PYTHON=/private/tmp/attune-backbone-venv/bin/python npm run test:live --prefix frontend
+PYTHONDONTWRITEBYTECODE=1 /private/tmp/attune-backbone-venv/bin/python -m unittest discover -s backend/tests -v
+```
+
+`frontend/README.md` documents installation and launch. Unit tests use Node's
+built-in runner, mocked transports/timers and one real Python mock fixture.
+The separate live suite requires the Phase 1 Python dependencies and loopback
+port permission; it creates and cleans up ephemeral backend/Vite servers.
+No EEG/audio hardware, participant data, or scientific dependencies are needed.
