@@ -15,3 +15,6 @@ training-runs/
 # Local transport environment and packaged UI handoff
 /.venv-backend/
 /ATTUNE_UI.zip
+
+# Local shared demo recordings (never application source)
+/demo-media/

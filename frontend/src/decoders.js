@@ -2,7 +2,18 @@
 const number = v => typeof v === 'number' && Number.isFinite(v) ? v : null;
 const text = v => typeof v === 'string' ? v : null;
 const boolean = v => typeof v === 'boolean' ? v : null;
+const mediaReference = p => Object.hasOwn(p, 'media_id') ? { mediaId: text(p.media_id), mediaRevision: number(p.media_revision), mediaTime: number(p.media_time_s) } : {};
 export const decoders = new Map([
+  ['media', p => ({ mediaId: text(p.media_id), title: text(p.title), mediaTime: number(p.media_time_s), duration: number(p.duration_s),
+    playbackState: ['playing', 'paused', 'stopped'].includes(p.playback_state) ? p.playback_state : null,
+    revision: number(p.revision), serverReference: number(p.server_reference_s), syncStatus: text(p.sync_status) })],
+  ['audio_sources', p => ({ sources: Array.isArray(p.sources) && p.sources.length === 2 &&
+    p.sources.every(s => s && typeof s === 'object' && ['A', 'B'].includes(s.id)) &&
+    new Set(p.sources.map(s => s.id)).size === 2 ? p.sources.map(s => ({
+      id: s.id, label: text(s.label), inputType: text(s.input_type), reference: text(s.reference),
+    })) : [] })],
+  ['gain', p => ({ a_db: number(p.a_db), b_db: number(p.b_db), ...mediaReference(p) })],
+  ['signal_quality', p => ({ quality: number(p.quality), artifact: boolean(p.artifact) })],
   ['feedback', p => ({
     status: p.simulated === true && p.metadata?.development_only === true && ['none', 'active', 'suppressed'].includes(p.status) ? p.status : 'suppressed',
     actionType: text(p.action_type), message: text(p.message), severity: ['info', 'warning', 'critical'].includes(p.severity) ? p.severity : 'info',
@@ -15,7 +26,7 @@ export const decoders = new Map([
     providerVersion: text(p.provider_version), task: text(p.task),
     timestamp: number(p.timestamp), windowId: text(p.window_id),
     windowStart: number(p.window_start), windowEnd: number(p.window_end),
-    outputs: Array.isArray(p.outputs) ? p.outputs.map(output => ({
+    outputs: Array.isArray(p.outputs) ? p.outputs.filter(output => output !== null && typeof output === 'object' && !Array.isArray(output)).map(output => ({
       name: text(output.name), value: Object.hasOwn(output, 'value') ? output.value : null,
       semanticType: text(output.semantic_type), label: text(output.label),
     })) : [], reasons: Array.isArray(p.reasons) ? p.reasons.filter(v => typeof v === 'string') : [],
@@ -25,7 +36,7 @@ export const decoders = new Map([
     const explicit = Object.hasOwn(p, 'decision');
     const decision = ['A', 'B', 'uncertain', 'unavailable'].includes(p.decision) ? p.decision : null;
     const attended = explicit ? decision : p.attended;
-    return { attended: ['A', 'B'].includes(attended) ? attended : null,
+    return { ...mediaReference(p), attended: ['A', 'B'].includes(attended) ? attended : null,
       correlationA: number(p.correlation_a), correlationB: number(p.correlation_b),
       ...(explicit ? { decision } : {}) };
   }],

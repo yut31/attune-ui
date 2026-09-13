@@ -147,8 +147,8 @@ test('F02-T19 Python mock packets decode across language boundary', () => {
   const code = 'import json\nfrom backend.adapters.mock import results\nfrom backend.app.protocol import make_packet\nprint(json.dumps([make_packet(k,t,i+1,s,"fixture",p) for i,(k,t,s,p) in enumerate(results(0))]))';
   const packets = JSON.parse(execFileSync('python3', ['-B', '-c', code], { cwd: new URL('../../', import.meta.url), encoding: 'utf8' }));
   let state = emptyState(); for (const p of packets) state = acceptPacket(state, p);
-  assert.equal(state.rejected, 0); assert.equal(state.streams.length, 7);
-  assert.deepEqual(state.streams.filter(s => s.known).map(s => s.type), ['attention', 'vigilance', 'sync', 'eeg_display', 'prediction']);
+  assert.equal(state.rejected, 0); assert.equal(state.streams.length, 8);
+  assert.deepEqual(state.streams.filter(s => s.known).map(s => s.type), ['audio_sources', 'attention', 'vigilance', 'signal_quality', 'sync', 'eeg_display', 'gain', 'prediction']);
   assert.equal(state.streams.find(s => s.type === 'signal_quality').values.quality, null);
 });
 test('F02-T20 debug dashboard renders status unavailable values and escaped payloads', () => {

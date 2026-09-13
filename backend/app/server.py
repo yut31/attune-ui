@@ -1,14 +1,20 @@
 """Local transport app. Producer factory injection is the integration boundary."""
 import asyncio
+import os
 import anyio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from .publisher import Publisher, LaggedSubscriber
 from .sessions import Sessions
+from .media import MediaTimeline
+from backend.adapters.mock import MockProducer
+from fastapi.responses import FileResponse
 
 
-def create_app(producer_factory=None, publisher=None):
+def create_app(producer_factory=None, publisher=None, media=None):
     publisher = publisher if publisher is not None else Publisher()
+    if media is not None and producer_factory is None:
+        producer_factory = lambda: MockProducer(timeline=media)
     sessions = Sessions(publisher, **({'producer_factory': producer_factory} if producer_factory else {}))
     sockets = set()
     stopping = asyncio.Event()
@@ -27,6 +33,31 @@ def create_app(producer_factory=None, publisher=None):
     app.state.publisher = publisher
     app.state.sessions = sessions
     app.state.sockets = sockets
+    app.state.media = media
+
+    @app.get('/api/media')
+    def media_config():
+        return media.descriptor() if media else None
+
+    @app.get('/api/media/file')
+    def media_file():
+        if media is None or not media.path.is_file():
+            raise HTTPException(404, 'Media unavailable')
+        return FileResponse(media.path, headers={'Cache-Control': 'no-store'})
+
+    @app.post('/api/media/control')
+    def media_control(data: dict):
+        if media is None:
+            raise HTTPException(404, 'Media unavailable')
+        with sessions.command_lock:
+            records = sessions.list()
+            if not records or records[-1]['id'] != data.get('session_id') or records[-1]['status'] != 'running':
+                raise HTTPException(409, 'Session inactive')
+            media.bind(data['session_id'])
+            try:
+                return media.control(data)
+            except (ValueError, TypeError):
+                raise HTTPException(409, 'Media command rejected; stop and prepare again')
 
     @app.get('/api/health')
     def health():
@@ -50,7 +81,10 @@ def create_app(producer_factory=None, publisher=None):
     @app.post('/api/session/start')
     def start():
         try:
-            return sessions.start()
+            record = sessions.start()
+            if media is not None:
+                media.bind(record['id'])
+            return record
         except RuntimeError as exc:
             raise HTTPException(409, str(exc)) from exc
         except Exception as exc:
@@ -59,6 +93,8 @@ def create_app(producer_factory=None, publisher=None):
     @app.post('/api/session/stop')
     def stop():
         try:
+            if media is not None:
+                media.stop()
             return sessions.stop()
         except RuntimeError as exc:
             raise HTTPException(503, str(exc)) from exc
@@ -109,4 +145,6 @@ def create_app(producer_factory=None, publisher=None):
     return app
 
 
-app = create_app()
+# Runtime configuration stays outside packets; never accept filesystem paths over HTTP.
+_media_path = os.environ.get('ATTUNE_MEDIA_FILE')
+app = create_app(media=MediaTimeline(_media_path, os.environ.get('ATTUNE_MEDIA_TITLE', 'Demo Audio')) if _media_path else None)
